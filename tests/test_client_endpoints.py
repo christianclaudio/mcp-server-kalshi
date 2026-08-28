@@ -158,3 +158,50 @@ async def test_all_unauthenticated_and_authenticated_endpoints(
         requests[-1].url.path
         == "/trade-api/v2/portfolio/events/orders/ord-123/decrease"
     )
+
+    # Batch orders
+    await client.batch_create_orders([{"ticker": "X-1"}])
+    assert requests[-1].url.path == "/trade-api/v2/portfolio/events/orders/batched"
+    assert requests[-1].method == "POST"
+
+    await client.batch_cancel_orders(["ord-1", "ord-2"])
+    assert requests[-1].url.path == "/trade-api/v2/portfolio/events/orders/batched"
+    assert requests[-1].method == "DELETE"
+
+    # Search & Discovery
+    await client.get_tags_by_categories()
+    assert requests[-1].url.path == "/trade-api/v2/search/tags_by_categories"
+
+    await client.get_sports_filters()
+    assert requests[-1].url.path == "/trade-api/v2/search/filters_by_sport"
+
+    # Milestones & Live Data
+    await client.get_milestones({"limit": 10})
+    assert requests[-1].url.path == "/trade-api/v2/milestones"
+
+    await client.get_milestone("mile-1")
+    assert requests[-1].url.path == "/trade-api/v2/milestones/mile-1"
+
+    await client.get_event_live_data("EV-1")
+    assert requests[-1].url.path == "/trade-api/v2/live_data/events/EV-1"
+
+    # Multivariate
+    await client.list_multivariate_collections({"limit": 5})
+    assert requests[-1].url.path == "/trade-api/v2/multivariate_event_collections"
+
+    await client.get_multivariate_collection("COL-1")
+    assert requests[-1].url.path == "/trade-api/v2/multivariate_event_collections/COL-1"
+
+    # Summary & Order Groups
+    await client.get_portfolio_summary()
+    assert (
+        requests[-1].url.path
+        == "/trade-api/v2/portfolio/summary/total_resting_order_value"
+    )
+
+    await client.list_order_groups({"limit": 5})
+    assert requests[-1].url.path == "/trade-api/v2/portfolio/order_groups"
+
+    await client.cancel_order_group("grp-1")
+    assert requests[-1].url.path == "/trade-api/v2/portfolio/order_groups/grp-1"
+    assert requests[-1].method == "DELETE"

@@ -37,6 +37,12 @@
           "name": "BASE_URL",
           "description": "Optional explicit REST base override (must include /trade-api/v2)",
           "isRequired": false
+        },
+        {
+          "name": "KALSHI_READONLY",
+          "description": "When true (1), restricts server exclusively to read-only tools",
+          "default": "false",
+          "isRequired": false
         }
       ]
     }

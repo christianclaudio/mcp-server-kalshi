@@ -302,3 +302,127 @@ class DecreaseOrderRequest(MCPSchemaBaseModel):
     reduce_to: float | None = Field(
         default=None, description="Target remaining contracts."
     )
+
+
+# ========================== Batch Orders & Groups ============================
+class BatchOrderItem(BaseModel):
+    """A single order instruction within a batch order request."""
+
+    ticker: str = Field(..., description="The market ticker to trade.")
+    action: Literal["buy", "sell"] = Field(..., description="Direction: buy or sell.")
+    side: Literal["yes", "no"] = Field(..., description="Outcome: yes or no.")
+    count: float = Field(..., gt=0, description="Contracts to trade.")
+    limit_price: int = Field(
+        ..., ge=1, le=99, description="Limit price in cents (1-99)."
+    )
+    time_in_force: Literal[
+        "good_till_canceled", "immediate_or_cancel", "fill_or_kill"
+    ] = Field(default="good_till_canceled", description="How long the order rests.")
+    post_only: bool = Field(
+        default=False, description="Reject if it would immediately match."
+    )
+    reduce_only: bool = Field(
+        default=False,
+        description="Cap size by current position (never flips direction).",
+    )
+    expiration_ts: int | None = Field(
+        default=None,
+        description="Optional Unix-seconds expiry (with good_till_canceled).",
+    )
+    client_order_id: str | None = Field(
+        default=None, description="Optional idempotency id."
+    )
+
+
+class BatchCreateOrdersRequest(MCPSchemaBaseModel):
+    """Batch order placement request (up to 20 orders in one atomic call)."""
+
+    orders: list[BatchOrderItem] = Field(
+        ..., min_length=1, max_length=20, description="List of orders to submit."
+    )
+    confirm: bool = Field(
+        default=False,
+        description="Must be true to place the batch. False returns a simulation preview.",
+    )
+
+
+class BatchCancelOrdersRequest(MCPSchemaBaseModel):
+    """Batch order cancellation request (up to 20 orders in one atomic call)."""
+
+    order_ids: list[str] = Field(
+        ..., min_length=1, max_length=20, description="List of order IDs to cancel."
+    )
+
+
+class GetPortfolioSummaryRequest(EmptyRequest):
+    """Request portfolio summary and total resting order exposure."""
+
+
+class GetTagsByCategoriesRequest(EmptyRequest):
+    """Request category-level discovery tags."""
+
+
+class GetSportsFiltersRequest(EmptyRequest):
+    """Request sport-level search filters."""
+
+
+class GetMilestonesRequest(MCPSchemaBaseModel):
+    """Request milestone trackers (e.g. sports games, elections)."""
+
+    limit: int = Field(default=20, ge=1, le=100, description="Number of milestones.")
+    category: str | None = Field(default=None, description="Filter by category.")
+    competition: str | None = Field(default=None, description="Filter by competition.")
+    type: str | None = Field(default=None, description="Filter by milestone type.")
+    related_event_ticker: str | None = Field(
+        default=None, description="Filter by event ticker."
+    )
+    cursor: str | None = Field(default=None, description="Pagination cursor.")
+
+
+class GetMilestoneRequest(MCPSchemaBaseModel):
+    """Request a specific milestone by ID."""
+
+    milestone_id: str = Field(..., description="The unique milestone ID.")
+
+
+class GetEventLiveDataRequest(MCPSchemaBaseModel):
+    """Request real-time live data/scoreboard for an event."""
+
+    event_ticker: str = Field(
+        ...,
+        description="The event ticker (e.g. KXNBA-27, KXMLB-...) to fetch live data for.",
+    )
+
+
+class ListMultivariateCollectionsRequest(MCPSchemaBaseModel):
+    """List multivariate / combo event collections."""
+
+    status: str | None = Field(
+        default=None, description="Filter by status (e.g. open)."
+    )
+    series_ticker: str | None = Field(
+        default=None, description="Filter by parent series ticker."
+    )
+    limit: int | None = Field(default=20, ge=1, le=100, description="Page limit.")
+    cursor: str | None = Field(default=None, description="Pagination cursor.")
+
+
+class GetMultivariateCollectionRequest(MCPSchemaBaseModel):
+    """Get details for a specific multivariate / combo collection."""
+
+    collection_ticker: str = Field(
+        ..., description="The collection ticker (e.g. KXCOMBO-...) to fetch."
+    )
+
+
+class ListOrderGroupsRequest(MCPSchemaBaseModel):
+    """List order groups (e.g. One-Cancels-Other / OCO risk groups)."""
+
+    limit: int | None = Field(default=20, ge=1, le=100, description="Page limit.")
+    cursor: str | None = Field(default=None, description="Pagination cursor.")
+
+
+class CancelOrderGroupRequest(MCPSchemaBaseModel):
+    """Cancel / delete an order group."""
+
+    order_group_id: str = Field(..., description="The order group ID to cancel.")

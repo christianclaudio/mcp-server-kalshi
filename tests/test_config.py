@@ -58,7 +58,9 @@ def test_has_credentials_and_api_key_value():
     assert both.has_credentials is True
     assert both.api_key_value() == "key-id"
 
-    both_alias = _settings(KALSHI_API_KEY_ID="alias-key-id", KALSHI_PRIVATE_KEY_PATH="/tmp/k.pem")
+    both_alias = _settings(
+        KALSHI_API_KEY_ID="alias-key-id", KALSHI_PRIVATE_KEY_PATH="/tmp/k.pem"
+    )
     assert both_alias.has_credentials is True
     assert both_alias.api_key_value() == "alias-key-id"
 

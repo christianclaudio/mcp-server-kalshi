@@ -1,40 +1,33 @@
-# Use a Python image with uv pre-installed
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS uv
+# syntax=docker/dockerfile:1
+# Multi-stage build for mcp-server-kalshi
+# Produces a minimal runtime image (~150MB) with no dev tooling.
 
-# Install the project into `/app`
-WORKDIR /app
-
-# Enable bytecode compilation
-ENV UV_COMPILE_BYTECODE=1
-
-# Copy from the cache instead of linking since it's a mounted volume
-ENV UV_LINK_MODE=copy
-
-# Install the project's dependencies using the lockfile and settings
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev --no-editable
-
-# Then, add the rest of the project source code and install it
-# Installing separately from its dependencies allows optimal layer caching
-ADD . /app
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable
-
-FROM python:3.12-slim-bookworm
-
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# ─── Stage 1: Builder ─────────────────────────────────────────────────────────
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
- 
 
+# Install build deps in a virtualenv so we can copy it cleanly
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Only copy the virtual environment which contains the installed packages
-COPY --from=uv --chown=app:app /app/.venv /app/.venv
+COPY pyproject.toml README.md LICENSE ./
+COPY src/ src/
 
-# Place executables in the environment at the front of the path
-ENV PATH="/app/.venv/bin:$PATH"
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir .
 
-# when running the container, add --db-path and a bind mount to the host's db file
+# ─── Stage 2: Runtime ─────────────────────────────────────────────────────────
+FROM python:3.12-slim AS runtime
+
+# Security: run as non-root
+RUN useradd --create-home --shell /bin/bash mcp
+USER mcp
+WORKDIR /home/mcp
+
+# Copy the pre-built virtualenv from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# MCP servers communicate over stdio — no port to expose
 ENTRYPOINT ["mcp-server-kalshi"]

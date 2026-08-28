@@ -40,6 +40,19 @@ EXPECTED_TOOLS = {
     "cancel_order",
     "amend_order",
     "decrease_order",
+    # batch & groups
+    "batch_create_orders",
+    "batch_cancel_orders",
+    "get_portfolio_summary",
+    "get_tags_by_categories",
+    "get_sports_filters",
+    "get_milestones",
+    "get_milestone",
+    "get_event_live_data",
+    "list_multivariate_collections",
+    "get_multivariate_collection",
+    "list_order_groups",
+    "cancel_order_group",
 }
 
 

@@ -162,6 +162,79 @@ EXPECTED_ANNOTATIONS: dict[str, dict[str, Any]] = {
         "idempotent": False,
         "openWorld": False,
     },
+    # Batch Orders & Groups
+    "batch_create_orders": {
+        "readOnly": False,
+        "destructive": True,
+        "idempotent": False,
+        "openWorld": False,
+    },
+    "batch_cancel_orders": {
+        "readOnly": False,
+        "destructive": True,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_portfolio_summary": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_tags_by_categories": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_sports_filters": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_milestones": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_milestone": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_event_live_data": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "list_multivariate_collections": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_multivariate_collection": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "list_order_groups": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "cancel_order_group": {
+        "readOnly": False,
+        "destructive": True,
+        "idempotent": True,
+        "openWorld": False,
+    },
 }
 
 

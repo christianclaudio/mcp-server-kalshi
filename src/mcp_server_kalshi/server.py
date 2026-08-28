@@ -24,11 +24,15 @@ from .kalshi_client.client import (
 from .kalshi_client.pdf import fetch_pdf_text
 from .kalshi_client.schemas import (
     AmendOrderRequest,
+    BatchCancelOrdersRequest,
+    BatchCreateOrdersRequest,
+    CancelOrderGroupRequest,
     CancelOrderRequest,
     CreateOrderRequest,
     DecreaseOrderRequest,
     EmptyRequest,
     FetchRulesPdfRequest,
+    GetEventLiveDataRequest,
     GetEventRequest,
     GetFillsRequest,
     GetMarketCandlesticksRequest,
@@ -36,12 +40,20 @@ from .kalshi_client.schemas import (
     GetMarketRequest,
     GetMarketRulesRequest,
     GetMarketTradesRequest,
+    GetMilestoneRequest,
+    GetMilestonesRequest,
+    GetMultivariateCollectionRequest,
     GetOrderRequest,
+    GetPortfolioSummaryRequest,
     GetPositionsRequest,
     GetSeriesRequest,
     GetSettlementsRequest,
+    GetSportsFiltersRequest,
+    GetTagsByCategoriesRequest,
     ListEventsRequest,
     ListMarketsRequest,
+    ListMultivariateCollectionsRequest,
+    ListOrderGroupsRequest,
     ListOrdersRequest,
     ListSeriesRequest,
     MCPSchemaBaseModel,
@@ -716,6 +728,219 @@ async def handle_decrease_order(request: dict[str, Any]) -> Any:
     req = DecreaseOrderRequest(**request)
     payload = build_decrease_order_payload(req.reduce_by, req.reduce_to)
     return await kalshi_client.decrease_order(req.order_id, payload)
+
+
+# ========================== Batch Orders & Groups ============================
+@ToolRegistry.register_tool(
+    name="batch_create_orders",
+    description=(
+        "Place up to 20 limit orders in a single atomic request (V2). "
+        "SAFETY: returns a simulation preview unless 'confirm=true' is passed explicitly."
+    ),
+    input_schema=BatchCreateOrdersRequest,
+    read_only=False,
+    destructive=True,
+    idempotent=False,
+    open_world=False,
+)
+async def handle_batch_create_orders(request: dict[str, Any]) -> Any:
+    req = BatchCreateOrdersRequest(**request)
+    order_payloads: list[dict[str, Any]] = []
+    previews: list[dict[str, Any]] = []
+    for item in req.orders:
+        p = build_create_order_payload(
+            ticker=item.ticker,
+            action=item.action,
+            side=item.side,
+            count=item.count,
+            limit_price_cents=item.limit_price,
+            time_in_force=item.time_in_force,
+            post_only=item.post_only,
+            reduce_only=item.reduce_only,
+            expiration_ts=item.expiration_ts,
+            client_order_id=item.client_order_id,
+        )
+        order_payloads.append(p)
+        previews.append(
+            {
+                "ticker": item.ticker,
+                "intent": f"{item.action.upper()} {item.count:g}x {item.side.upper()} @ {item.limit_price}¢",
+                "kalshi_v2_payload": p,
+            }
+        )
+    if not req.confirm:
+        return {
+            "preview": True,
+            "environment": settings.env_label,
+            "batch_size": len(order_payloads),
+            "orders": previews,
+            "confirm_required": True,
+        }
+    result = await kalshi_client.batch_create_orders(order_payloads)
+    return {
+        "placed": True,
+        "environment": settings.env_label,
+        "batch_size": len(order_payloads),
+        "result": result,
+    }
+
+
+@ToolRegistry.register_tool(
+    name="batch_cancel_orders",
+    description="Cancel up to 20 resting orders in a single atomic request (V2). Reduces portfolio exposure.",
+    input_schema=BatchCancelOrdersRequest,
+    read_only=False,
+    destructive=True,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_batch_cancel_orders(request: dict[str, Any]) -> Any:
+    req = BatchCancelOrdersRequest(**request)
+    result = await kalshi_client.batch_cancel_orders(req.order_ids)
+    return {
+        "canceled": True,
+        "environment": settings.env_label,
+        "count": len(req.order_ids),
+        "result": result,
+    }
+
+
+@ToolRegistry.register_tool(
+    name="get_portfolio_summary",
+    description="Get total resting order value and collateral exposure (authenticated).",
+    input_schema=GetPortfolioSummaryRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_portfolio_summary(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_portfolio_summary()
+
+
+@ToolRegistry.register_tool(
+    name="get_tags_by_categories",
+    description="Get taxonomy tags grouped by series categories for market discovery.",
+    input_schema=GetTagsByCategoriesRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_tags_by_categories(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_tags_by_categories()
+
+
+@ToolRegistry.register_tool(
+    name="get_sports_filters",
+    description="Get sport-level search and filtering taxonomies.",
+    input_schema=GetSportsFiltersRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_sports_filters(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_sports_filters()
+
+
+@ToolRegistry.register_tool(
+    name="get_milestones",
+    description="Browse milestone trackers across sports games, elections, and events.",
+    input_schema=GetMilestonesRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_milestones(request: dict[str, Any]) -> Any:
+    params = _params(request, GetMilestonesRequest)
+    return await kalshi_client.get_milestones(params)
+
+
+@ToolRegistry.register_tool(
+    name="get_milestone",
+    description="Get detailed milestone status and properties by milestone ID.",
+    input_schema=GetMilestoneRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_milestone(request: dict[str, Any]) -> Any:
+    req = GetMilestoneRequest(**request)
+    return await kalshi_client.get_milestone(req.milestone_id)
+
+
+@ToolRegistry.register_tool(
+    name="get_event_live_data",
+    description="Get real-time live scoreboard/game state data for an event ticker.",
+    input_schema=GetEventLiveDataRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_event_live_data(request: dict[str, Any]) -> Any:
+    req = GetEventLiveDataRequest(**request)
+    return await kalshi_client.get_event_live_data(req.event_ticker)
+
+
+@ToolRegistry.register_tool(
+    name="list_multivariate_collections",
+    description="List multivariate / combo and parlay market collections.",
+    input_schema=ListMultivariateCollectionsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_multivariate_collections(request: dict[str, Any]) -> Any:
+    params = _params(request, ListMultivariateCollectionsRequest)
+    return await kalshi_client.list_multivariate_collections(params)
+
+
+@ToolRegistry.register_tool(
+    name="get_multivariate_collection",
+    description="Get details and component markets for a multivariate / combo collection.",
+    input_schema=GetMultivariateCollectionRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_multivariate_collection(request: dict[str, Any]) -> Any:
+    req = GetMultivariateCollectionRequest(**request)
+    return await kalshi_client.get_multivariate_collection(req.collection_ticker)
+
+
+@ToolRegistry.register_tool(
+    name="list_order_groups",
+    description="List active order groups (e.g. One-Cancels-Other / OCO risk groups) (authenticated).",
+    input_schema=ListOrderGroupsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_order_groups(request: dict[str, Any]) -> Any:
+    params = _params(request, ListOrderGroupsRequest)
+    return await kalshi_client.list_order_groups(params)
+
+
+@ToolRegistry.register_tool(
+    name="cancel_order_group",
+    description="Cancel and dissolve an active order group (authenticated).",
+    input_schema=CancelOrderGroupRequest,
+    read_only=False,
+    destructive=True,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_cancel_order_group(request: dict[str, Any]) -> Any:
+    req = CancelOrderGroupRequest(**request)
+    result = await kalshi_client.cancel_order_group(req.order_group_id)
+    return {"canceled": True, "environment": settings.env_label, "result": result}
 
 
 # =============================== Server wiring ===============================

@@ -197,6 +197,99 @@ async def test_all_24_handlers_execute_successfully(
     )
     assert out["decreased"] is True
 
+    # 25. batch_create_orders (preview vs confirm)
+    preview_batch = handler_result(
+        await server.handle_batch_create_orders(
+            {
+                "orders": [
+                    {
+                        "ticker": "M-1",
+                        "action": "buy",
+                        "side": "yes",
+                        "count": 10,
+                        "limit_price": 50,
+                    }
+                ],
+                "confirm": False,
+            }
+        )
+    )
+    assert preview_batch["preview"] is True
+    assert preview_batch["batch_size"] == 1
+
+    confirmed_batch = handler_result(
+        await server.handle_batch_create_orders(
+            {
+                "orders": [
+                    {
+                        "ticker": "M-1",
+                        "action": "buy",
+                        "side": "yes",
+                        "count": 10,
+                        "limit_price": 50,
+                    }
+                ],
+                "confirm": True,
+            }
+        )
+    )
+    assert confirmed_batch["placed"] is True
+
+    # 26. batch_cancel_orders
+    out = handler_result(
+        await server.handle_batch_cancel_orders({"order_ids": ["ord-1", "ord-2"]})
+    )
+    assert out["canceled"] is True
+    assert out["count"] == 2
+
+    # 27. get_portfolio_summary
+    out = handler_result(await server.handle_get_portfolio_summary({}))
+    assert out == {"ok": True}
+
+    # 28. get_tags_by_categories
+    out = handler_result(await server.handle_get_tags_by_categories({}))
+    assert out == {"ok": True}
+
+    # 29. get_sports_filters
+    out = handler_result(await server.handle_get_sports_filters({}))
+    assert out == {"ok": True}
+
+    # 30. get_milestones
+    out = handler_result(await server.handle_get_milestones({"limit": 5}))
+    assert out == {"ok": True}
+
+    # 31. get_milestone
+    out = handler_result(await server.handle_get_milestone({"milestone_id": "m-1"}))
+    assert out == {"ok": True}
+
+    # 32. get_event_live_data
+    out = handler_result(
+        await server.handle_get_event_live_data({"event_ticker": "EV-1"})
+    )
+    assert out == {"ok": True}
+
+    # 33. list_multivariate_collections
+    out = handler_result(
+        await server.handle_list_multivariate_collections({"limit": 5})
+    )
+    assert out == {"ok": True}
+
+    # 34. get_multivariate_collection
+    out = handler_result(
+        await server.handle_get_multivariate_collection({"collection_ticker": "COL-1"})
+    )
+    assert out == {"ok": True}
+
+    # 35. list_order_groups
+    out = handler_result(await server.handle_list_order_groups({"limit": 5}))
+    assert out == {"ok": True}
+
+    # 36. cancel_order_group
+    out = handler_result(
+        await server.handle_cancel_order_group({"order_group_id": "grp-1"})
+    )
+    assert out["canceled"] is True
+
 
 async def test_get_market_rules_handles_event_lookup_error(
     monkeypatch: pytest.MonkeyPatch,
@@ -246,7 +339,10 @@ def test_readonly_mode_filtering(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "cancel_order" not in tool_names
     assert "amend_order" not in tool_names
     assert "decrease_order" not in tool_names
-    assert len(tools) == 20
+    assert "batch_create_orders" not in tool_names
+    assert "batch_cancel_orders" not in tool_names
+    assert "cancel_order_group" not in tool_names
+    assert len(tools) == 29
 
     # Handler lookup for read-only tool in readonly mode succeeds
     handler = server.ToolRegistry.get_handler("list_markets")

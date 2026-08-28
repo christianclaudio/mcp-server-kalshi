@@ -147,8 +147,13 @@ class BaseAPIClient:
     async def post(self, path: str, json: dict[str, Any] | None = None) -> Any:
         return await self._request("POST", path, json=json)
 
-    async def delete(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        return await self._request("DELETE", path, params=params)
+    async def delete(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+    ) -> Any:
+        return await self._request("DELETE", path, params=params, json=json)
 
     async def patch(self, path: str, json: dict[str, Any] | None = None) -> Any:
         return await self._request("PATCH", path, json=json)

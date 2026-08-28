@@ -2,35 +2,87 @@ name: CI
 
 on:
   push:
+    branches: [main, feat/*]
   pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
 
 jobs:
+  lint:
+    name: Lint, format and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --all-extras
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+      - name: Black format check
+        run: uv run black --check src tests
+      - name: Mypy strict
+        run: uv run mypy
+
   test:
+    name: Tests (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --all-extras
+      - name: Unit tests + 100% coverage
+        run: uv run pytest --cov=src/mcp_server_kalshi --cov-report=term-missing --cov-fail-under=100 -v
 
-      - name: Lint (ruff)
-        run: uv run ruff check src tests
+  contract:
+    name: Tool contract verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --all-extras
+      - name: Verify tool contracts and annotations
+        run: uv run python scripts/check_tool_contract.py
 
-      - name: Format check (black)
-        run: uv run black --check src tests
+  openapi-drift:
+    name: OpenAPI drift check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --all-extras
+      - name: Check client paths against Kalshi OpenAPI spec
+        run: uv run python scripts/check_openapi_drift.py
 
-      - name: Type check (mypy)
-        run: uv run mypy
-
-      - name: Tests + coverage
-        run: uv run pytest --cov --cov-report=term-missing
+  smoke:
+    name: Stdio JSON-RPC smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --all-extras
+      - name: Stdio smoke test
+        run: uv run python scripts/smoke_test.py

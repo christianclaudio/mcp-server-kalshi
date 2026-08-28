@@ -71,14 +71,14 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 1. **Environment Awareness**:
    - Always call `get_environment` first to determine whether the server is operating in `DEMO (sandbox)` or `PROD (real money)`.
 2. **Order Placement Safety Gate**:
-   - `create_order` and `amend_order` will return a simulation **preview** unless explicitly called with `confirm=True`.
-   - Never call `confirm=True` on real money (`PROD`) without explicit user permission.
+   - `create_order`, `amend_order`, and `batch_create_orders` will return a simulation **preview** unless explicitly called with `confirm=True`.
+   - Never call `confirm=True` on real money (`PROD`) without explicit user confirmation.
 3. **Read-Only Mode**:
-   - When configured with `KALSHI_READONLY=1`, mutating order endpoints (`create_order`, `cancel_order`, `amend_order`, `decrease_order`) are disabled at startup.
+   - When configured with `KALSHI_READONLY=1`, mutating order endpoints (`create_order`, `cancel_order`, `amend_order`, `decrease_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) are disabled at startup.
 
 ---
 
-## 3. Tool Annotations
+## 3. Tool Annotations (36 Tools)
 
 | Tool Name | Type / Scope | `readOnlyHint` | `destructiveHint` | `idempotentHint` | `openWorldHint` |
 | :--- | :--- | :---: | :---: | :---: | :---: |
@@ -88,15 +88,23 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 | `get_event` | Discovery | `true` | `false` | `true` | `false` |
 | `list_series` | Discovery | `true` | `false` | `true` | `false` |
 | `get_series` | Discovery | `true` | `false` | `true` | `false` |
+| `get_tags_by_categories` | Discovery | `true` | `false` | `true` | `false` |
+| `get_sports_filters` | Discovery | `true` | `false` | `true` | `false` |
 | `get_market_orderbook` | Research | `true` | `false` | `true` | `false` |
 | `get_market_candlesticks`| Research | `true` | `false` | `true` | `false` |
 | `get_market_trades` | Research | `true` | `false` | `true` | `false` |
 | `get_market_rules` | Rules | `true` | `false` | `true` | `false` |
 | `fetch_rules_pdf` | Rules / PDF | `true` | `false` | `true` | `true` |
+| `get_milestones` | Live / Tracker | `true` | `false` | `true` | `false` |
+| `get_milestone` | Live / Tracker | `true` | `false` | `true` | `false` |
+| `get_event_live_data` | Live Data | `true` | `false` | `true` | `false` |
+| `list_multivariate_collections`| Combos / Parlays | `true` | `false` | `true` | `false` |
+| `get_multivariate_collection` | Combos / Parlays | `true` | `false` | `true` | `false` |
 | `get_environment` | System | `true` | `false` | `true` | `false` |
 | `get_exchange_status` | Exchange | `true` | `false` | `true` | `false` |
 | `get_exchange_schedule`| Exchange | `true` | `false` | `true` | `false` |
 | `get_balance` | Portfolio | `true` | `false` | `true` | `false` |
+| `get_portfolio_summary`| Portfolio | `true` | `false` | `true` | `false` |
 | `get_positions` | Portfolio | `true` | `false` | `true` | `false` |
 | `get_fills` | Portfolio | `true` | `false` | `true` | `false` |
 | `get_settlements` | Portfolio | `true` | `false` | `true` | `false` |
@@ -106,6 +114,10 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 | `cancel_order` | Trading | `false` | `true` | `true` | `false` |
 | `amend_order` | Trading | `false` | `true` | `false` | `false` |
 | `decrease_order` | Trading | `false` | `true` | `false` | `false` |
+| `batch_create_orders` | Trading | `false` | `true` | `false` | `false` |
+| `batch_cancel_orders` | Trading | `false` | `true` | `true` | `false` |
+| `list_order_groups` | Risk / Groups | `true` | `false` | `true` | `false` |
+| `cancel_order_group` | Risk / Groups | `false` | `true` | `true` | `false` |
 
 ---
 
@@ -119,8 +131,21 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 5. Preview order: `create_order(ticker="...", action="buy", side="yes", count=10, limit_price=54, confirm=False)`.
 6. Confirm with user and submit: `create_order(..., confirm=True)`.
 
-### Recipe 2: Position Risk & Order Management
-1. Check available collateral: `get_balance()`.
-2. List open positions: `get_positions()`.
-3. List resting limit orders: `list_orders(status="resting")`.
-4. Cancel or adjust resting risk: `cancel_order(order_id="...")` or `decrease_order(order_id="...", reduce_by=5)`.
+### Recipe 2: Batch Quoting & Emergency Flattening
+1. Submit batch two-sided quotes:
+   ```python
+   batch_create_orders(orders=[
+       {"ticker": "KXNBA-27-PHI", "action": "buy", "side": "yes", "count": 10, "limit_price": 50},
+       {"ticker": "KXNBA-27-PHI", "action": "sell", "side": "yes", "count": 10, "limit_price": 55},
+   ], confirm=True)
+   ```
+2. Batch cancel resting exposure:
+   ```python
+   batch_cancel_orders(order_ids=["ord-1", "ord-2", "ord-3"])
+   ```
+
+### Recipe 3: Live Score Grounding & In-Game Hedging
+1. Query live scoreboard: `get_event_live_data(event_ticker="KXNBA-27")`.
+2. Check milestones: `get_milestones(related_event_ticker="KXNBA-27")`.
+3. Review total resting order value: `get_portfolio_summary()`.
+4. Adjust resting orders dynamically.

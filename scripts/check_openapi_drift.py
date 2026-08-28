@@ -35,6 +35,17 @@ CLIENT_COVERED_ROUTES = {
     "/portfolio/events/orders/{order_id}": "cancel_order",
     "/portfolio/events/orders/{order_id}/amend": "amend_order",
     "/portfolio/events/orders/{order_id}/decrease": "decrease_order",
+    "/portfolio/events/orders/batched": "batch_create_orders / batch_cancel_orders",
+    "/portfolio/summary/total_resting_order_value": "get_portfolio_summary",
+    "/search/tags_by_categories": "get_tags_by_categories",
+    "/search/filters_by_sport": "get_sports_filters",
+    "/milestones": "get_milestones",
+    "/milestones/{milestone_id}": "get_milestone",
+    "/live_data/events/{event_ticker}": "get_event_live_data",
+    "/multivariate_event_collections": "list_multivariate_collections",
+    "/multivariate_event_collections/{collection_ticker}": "get_multivariate_collection",
+    "/portfolio/order_groups": "list_order_groups",
+    "/portfolio/order_groups/{order_group_id}": "cancel_order_group",
 }
 
 

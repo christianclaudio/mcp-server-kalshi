@@ -238,3 +238,72 @@ class KalshiAPIClient(BaseAPIClient):
         return await self.post(
             f"/portfolio/events/orders/{quoted}/decrease", json=payload
         )
+
+    # ---- Batch Orders (auth) ------------------------------------------------------
+    async def batch_create_orders(self, orders_payload: list[dict[str, Any]]) -> Any:
+        """Batch create up to 20 orders in one atomic call."""
+        self._require_auth()
+        return await self.post(
+            "/portfolio/events/orders/batched", json={"orders": orders_payload}
+        )
+
+    async def batch_cancel_orders(self, order_ids: list[str]) -> Any:
+        """Batch cancel up to 20 orders in one atomic call."""
+        self._require_auth()
+        items = [{"order_id": oid} for oid in order_ids]
+        return await self.delete(
+            "/portfolio/events/orders/batched", json={"orders": items}
+        )
+
+    # ---- Search & Discovery (public) ---------------------------------------------
+    async def get_tags_by_categories(self) -> Any:
+        """Get tags grouped by series categories."""
+        return await self.get("/search/tags_by_categories")
+
+    async def get_sports_filters(self) -> Any:
+        """Get discovery filters for sports markets."""
+        return await self.get("/search/filters_by_sport")
+
+    # ---- Milestones & Live Data (public) ------------------------------------------
+    async def get_milestones(self, params: dict[str, Any] | None = None) -> Any:
+        """Get milestone trackers across categories."""
+        return await self.get("/milestones", params=params)
+
+    async def get_milestone(self, milestone_id: str) -> Any:
+        """Get specific milestone details by ID."""
+        quoted = urllib.parse.quote(milestone_id, safe="")
+        return await self.get(f"/milestones/{quoted}")
+
+    async def get_event_live_data(self, event_ticker: str) -> Any:
+        """Get real-time live scoreboard/data for an event."""
+        quoted = urllib.parse.quote(event_ticker, safe="")
+        return await self.get(f"/live_data/events/{quoted}")
+
+    # ---- Multivariate & Combos (public) ------------------------------------------
+    async def list_multivariate_collections(
+        self, params: dict[str, Any] | None = None
+    ) -> Any:
+        """List multivariate / combo event collections."""
+        return await self.get("/multivariate_event_collections", params=params)
+
+    async def get_multivariate_collection(self, collection_ticker: str) -> Any:
+        """Get details for a multivariate / combo event collection."""
+        quoted = urllib.parse.quote(collection_ticker, safe="")
+        return await self.get(f"/multivariate_event_collections/{quoted}")
+
+    # ---- Portfolio Summary & Order Groups (auth) ---------------------------------
+    async def get_portfolio_summary(self) -> Any:
+        """Get total resting order value and exposure."""
+        self._require_auth()
+        return await self.get("/portfolio/summary/total_resting_order_value")
+
+    async def list_order_groups(self, params: dict[str, Any] | None = None) -> Any:
+        """List active order groups."""
+        self._require_auth()
+        return await self.get("/portfolio/order_groups", params=params)
+
+    async def cancel_order_group(self, order_group_id: str) -> Any:
+        """Cancel/delete an active order group."""
+        self._require_auth()
+        quoted = urllib.parse.quote(order_group_id, safe="")
+        return await self.delete(f"/portfolio/order_groups/{quoted}")
