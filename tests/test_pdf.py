@@ -17,7 +17,9 @@ class _FakeResponse:
     def raise_for_status(self):
         if self.status_code >= 400:
             raise httpx.HTTPStatusError(
-                "error", request=httpx.Request("GET", "http://x"), response=None  # type: ignore[arg-type]
+                "error",
+                request=httpx.Request("GET", "http://x"),
+                response=None,  # type: ignore[arg-type]
             )
 
 

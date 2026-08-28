@@ -1,27 +1,26 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 
 class MCPSchemaBaseModel(BaseModel):
     @classmethod
-    def to_mcp_input_schema(cls) -> dict:
+    def to_mcp_input_schema(cls) -> dict[str, Any]:
         """Convert this model into a clean MCP Tool inputSchema.
 
         Flattens ``Optional`` fields (drops the ``anyOf``/null noise pydantic emits) and
         inlines enum ``$ref``s so MCP clients render simple, readable parameter schemas.
         """
         schema = cls.model_json_schema()
-        properties = {}
+        properties: dict[str, Any] = {}
         for name, prop in schema.get("properties", {}).items():
-            clean_prop = prop
-            if "anyOf" in prop:
-                for variant in prop["anyOf"]:
-                    if variant.get("type") != "null":
-                        clean_prop = dict(variant)
-                        if "description" in prop:
-                            clean_prop["description"] = prop["description"]
-                        break
+            clean_prop: dict[str, Any] = dict(prop)
+            if "anyOf" in clean_prop:
+                non_null = [v for v in clean_prop["anyOf"] if v.get("type") != "null"]
+                if len(non_null) == 1:
+                    clean_prop = dict(non_null[0])
+                    if "description" in prop:
+                        clean_prop["description"] = prop["description"]
 
             if "$ref" in clean_prop:
                 ref_key = clean_prop["$ref"].split("/")[-1]

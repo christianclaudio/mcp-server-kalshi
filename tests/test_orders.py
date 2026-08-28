@@ -50,20 +50,33 @@ def test_create_order_optional_fields():
         count=2.5,
         limit_price_cents=50,
         post_only=True,
+        reduce_only=True,
         client_order_id="abc",
         expiration_ts=1234,
     )
     assert payload["count"] == "2.5"
     assert payload["post_only"] is True
+    assert payload["reduce_only"] is True
     assert payload["client_order_id"] == "abc"
     assert payload["expiration_time"] == 1234
 
 
 def test_amend_payload_uses_same_translation():
     payload = build_amend_order_payload(
-        ticker="X-1", action="buy", side="no", count=5, limit_price_cents=40
+        ticker="X-1",
+        action="buy",
+        side="no",
+        count=5,
+        limit_price_cents=40,
+        updated_client_order_id="new-client-id",
     )
-    assert payload == {"ticker": "X-1", "side": "ask", "price": "0.6000", "count": "5"}
+    assert payload == {
+        "ticker": "X-1",
+        "side": "ask",
+        "price": "0.6000",
+        "count": "5",
+        "updated_client_order_id": "new-client-id",
+    }
 
 
 def test_decrease_payload_requires_exactly_one():

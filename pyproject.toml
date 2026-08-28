@@ -68,12 +68,15 @@ ignore = ["E501"]
 python_version = "3.10"
 files = ["src/mcp_server_kalshi"]
 mypy_path = "src"
+strict = true
 warn_unused_ignores = true
 warn_redundant_casts = true
-# Lenient to start (the code is annotated but not exhaustively); tighten over time.
-disallow_untyped_defs = false
-ignore_missing_imports = true
 
 [tool.coverage.run]
 source = ["mcp_server_kalshi"]
 branch = true
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+

@@ -1,3 +1,4 @@
+import urllib.parse
 from typing import Any
 
 from .base import BaseAPIClient
@@ -26,7 +27,7 @@ def build_create_order_payload(
     reduce_only: bool = False,
     client_order_id: str | None = None,
     expiration_ts: int | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Translate an intuitive (action, side, cents) order into the Kalshi V2 payload.
 
     Kalshi's V2 order endpoint quotes everything from the YES leg via a book ``side`` of
@@ -74,7 +75,7 @@ def build_amend_order_payload(
     count: float,
     limit_price_cents: int,
     updated_client_order_id: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Build the Kalshi V2 amend body, using the same YES-leg translation as create."""
     action = action.lower()
     side = side.lower()
@@ -94,7 +95,7 @@ def build_amend_order_payload(
 
 def build_decrease_order_payload(
     reduce_by: float | None = None, reduce_to: float | None = None
-) -> dict:
+) -> dict[str, Any]:
     """Build the Kalshi V2 decrease body. Exactly one of reduce_by / reduce_to required."""
     if (reduce_by is None) == (reduce_to is None):
         raise ValueError("Provide exactly one of reduce_by or reduce_to.")
@@ -127,15 +128,17 @@ class KalshiAPIClient(BaseAPIClient):
         return await self.get("/exchange/schedule")
 
     # ---- Markets ------------------------------------------------------------------
-    async def get_markets(self, params: dict | None = None) -> Any:
+    async def get_markets(self, params: dict[str, Any] | None = None) -> Any:
         return await self.get("/markets", params=params)
 
     async def get_market(self, ticker: str) -> Any:
-        return await self.get(f"/markets/{ticker}")
+        quoted = urllib.parse.quote(ticker, safe="")
+        return await self.get(f"/markets/{quoted}")
 
     async def get_market_orderbook(self, ticker: str, depth: int | None = None) -> Any:
         params = {"depth": depth} if depth is not None else None
-        return await self.get(f"/markets/{ticker}/orderbook", params=params)
+        quoted = urllib.parse.quote(ticker, safe="")
+        return await self.get(f"/markets/{quoted}/orderbook", params=params)
 
     async def get_market_candlesticks(
         self,
@@ -154,15 +157,18 @@ class KalshiAPIClient(BaseAPIClient):
         }
         if include_latest_before_start is not None:
             params["include_latest_before_start"] = include_latest_before_start
+        quoted_series = urllib.parse.quote(series, safe="")
+        quoted_ticker = urllib.parse.quote(ticker, safe="")
         return await self.get(
-            f"/series/{series}/markets/{ticker}/candlesticks", params=params
+            f"/series/{quoted_series}/markets/{quoted_ticker}/candlesticks",
+            params=params,
         )
 
-    async def get_market_trades(self, params: dict | None = None) -> Any:
+    async def get_market_trades(self, params: dict[str, Any] | None = None) -> Any:
         return await self.get("/markets/trades", params=params)
 
     # ---- Events -------------------------------------------------------------------
-    async def get_events(self, params: dict | None = None) -> Any:
+    async def get_events(self, params: dict[str, Any] | None = None) -> Any:
         return await self.get("/events", params=params)
 
     async def get_event(
@@ -173,58 +179,62 @@ class KalshiAPIClient(BaseAPIClient):
             if with_nested_markets is not None
             else None
         )
-        return await self.get(f"/events/{event_ticker}", params=params)
+        quoted = urllib.parse.quote(event_ticker, safe="")
+        return await self.get(f"/events/{quoted}", params=params)
 
     # ---- Series -------------------------------------------------------------------
-    async def get_series_list(self, params: dict | None = None) -> Any:
+    async def get_series_list(self, params: dict[str, Any] | None = None) -> Any:
         return await self.get("/series", params=params)
 
     async def get_series(self, series_ticker: str) -> Any:
-        return await self.get(f"/series/{series_ticker}")
+        quoted = urllib.parse.quote(series_ticker, safe="")
+        return await self.get(f"/series/{quoted}")
 
     # ---- Portfolio (auth) ---------------------------------------------------------
     async def get_balance(self) -> Any:
         self._require_auth()
         return await self.get("/portfolio/balance")
 
-    async def get_positions(self, params: dict | None = None) -> Any:
+    async def get_positions(self, params: dict[str, Any] | None = None) -> Any:
         self._require_auth()
         return await self.get("/portfolio/positions", params=params)
 
-    async def get_fills(self, params: dict | None = None) -> Any:
+    async def get_fills(self, params: dict[str, Any] | None = None) -> Any:
         self._require_auth()
         return await self.get("/portfolio/fills", params=params)
 
-    async def get_settlements(self, params: dict | None = None) -> Any:
+    async def get_settlements(self, params: dict[str, Any] | None = None) -> Any:
         self._require_auth()
         return await self.get("/portfolio/settlements", params=params)
 
     # ---- Orders: reads (auth) -----------------------------------------------------
-    async def get_orders(self, params: dict | None = None) -> Any:
+    async def get_orders(self, params: dict[str, Any] | None = None) -> Any:
         self._require_auth()
         return await self.get("/portfolio/orders", params=params)
 
     async def get_order(self, order_id: str) -> Any:
         self._require_auth()
-        return await self.get(f"/portfolio/orders/{order_id}")
+        quoted = urllib.parse.quote(order_id, safe="")
+        return await self.get(f"/portfolio/orders/{quoted}")
 
     # ---- Orders: writes / V2 (auth) -----------------------------------------------
-    async def create_order(self, payload: dict) -> Any:
+    async def create_order(self, payload: dict[str, Any]) -> Any:
         self._require_auth()
         return await self.post("/portfolio/events/orders", json=payload)
 
     async def cancel_order(self, order_id: str) -> Any:
         self._require_auth()
-        return await self.delete(f"/portfolio/events/orders/{order_id}")
+        quoted = urllib.parse.quote(order_id, safe="")
+        return await self.delete(f"/portfolio/events/orders/{quoted}")
 
-    async def amend_order(self, order_id: str, payload: dict) -> Any:
+    async def amend_order(self, order_id: str, payload: dict[str, Any]) -> Any:
         self._require_auth()
-        return await self.post(
-            f"/portfolio/events/orders/{order_id}/amend", json=payload
-        )
+        quoted = urllib.parse.quote(order_id, safe="")
+        return await self.post(f"/portfolio/events/orders/{quoted}/amend", json=payload)
 
-    async def decrease_order(self, order_id: str, payload: dict) -> Any:
+    async def decrease_order(self, order_id: str, payload: dict[str, Any]) -> Any:
         self._require_auth()
+        quoted = urllib.parse.quote(order_id, safe="")
         return await self.post(
-            f"/portfolio/events/orders/{order_id}/decrease", json=payload
+            f"/portfolio/events/orders/{quoted}/decrease", json=payload
         )

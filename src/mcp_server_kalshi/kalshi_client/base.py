@@ -1,11 +1,14 @@
 import base64
 import time
+from collections.abc import Generator
 from typing import Any
 
 import httpx
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
+
+from ..errors import KalshiAPIError, redact_secrets
 
 
 def load_private_key_from_file(file_path: str) -> rsa.RSAPrivateKey:
@@ -43,11 +46,13 @@ class KalshiAuth(httpx.Auth):
     ``/trade-api/v2`` prefix but EXCLUDES the query string.
     """
 
-    def __init__(self, private_key: rsa.RSAPrivateKey, api_key: str):
+    def __init__(self, private_key: rsa.RSAPrivateKey, api_key: str) -> None:
         self._private_key = private_key
         self._api_key = api_key
 
-    def auth_flow(self, request: httpx.Request):
+    def auth_flow(
+        self, request: httpx.Request
+    ) -> Generator[httpx.Request, httpx.Response, None]:
         method = request.method
         # raw_path includes the query string; Kalshi signs the path only.
         path = request.url.raw_path.decode().split("?", 1)[0]
@@ -59,17 +64,6 @@ class KalshiAuth(httpx.Auth):
         request.headers["KALSHI-ACCESS-SIGNATURE"] = signature
         request.headers["KALSHI-ACCESS-TIMESTAMP"] = timestamp
         yield request
-
-
-class KalshiAPIError(Exception):
-    """Raised when the Kalshi API returns a non-2xx response, carrying the error body."""
-
-    def __init__(self, status_code: int, method: str, path: str, body: Any):
-        self.status_code = status_code
-        self.method = method
-        self.path = path
-        self.body = body
-        super().__init__(f"Kalshi API {status_code} on {method} {path}: {body}")
 
 
 class BaseAPIClient:
@@ -91,7 +85,7 @@ class BaseAPIClient:
         api_key: str | None = None,
         private_key_path: str | None = None,
         timeout: int = 30,
-    ):
+    ) -> None:
         self._base_url: str = base_url.rstrip("/")
         self._timeout: int = timeout
         self._api_key: str | None = api_key
@@ -131,8 +125,8 @@ class BaseAPIClient:
         self,
         method: str,
         path: str,
-        params: dict | None = None,
-        json: dict | None = None,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
     ) -> Any:
         client = self._ensure_client()
         url = self._base_url + path
@@ -141,22 +135,22 @@ class BaseAPIClient:
             try:
                 body: Any = response.json()
             except Exception:
-                body = response.text
+                body = redact_secrets(response.text)
             raise KalshiAPIError(response.status_code, method, path, body)
         if not response.content:
             return {}
         return response.json()
 
-    async def get(self, path: str, params: dict | None = None) -> Any:
+    async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         return await self._request("GET", path, params=params)
 
-    async def post(self, path: str, json: dict | None = None) -> Any:
+    async def post(self, path: str, json: dict[str, Any] | None = None) -> Any:
         return await self._request("POST", path, json=json)
 
-    async def delete(self, path: str, params: dict | None = None) -> Any:
+    async def delete(self, path: str, params: dict[str, Any] | None = None) -> Any:
         return await self._request("DELETE", path, params=params)
 
-    async def patch(self, path: str, json: dict | None = None) -> Any:
+    async def patch(self, path: str, json: dict[str, Any] | None = None) -> Any:
         return await self._request("PATCH", path, json=json)
 
     async def aclose(self) -> None:
@@ -164,9 +158,9 @@ class BaseAPIClient:
             await self._client.aclose()
             self._client = None
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "BaseAPIClient":
         self._ensure_client()
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: Any) -> None:
         await self.aclose()

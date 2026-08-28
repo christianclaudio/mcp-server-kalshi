@@ -94,3 +94,19 @@ def test_load_private_key_rejects_non_rsa_key(tmp_path):
 
     with pytest.raises(ValueError, match="RSA"):
         load_private_key_from_file(str(key_file))
+
+
+async def test_client_context_manager_and_aclose(rsa_key_file):
+    client = KalshiAPIClient(
+        base_url="https://demo-api.kalshi.co/trade-api/v2",
+        api_key="key-id",
+        private_key_path=rsa_key_file,
+    )
+    assert client.has_credentials is True
+    async with client as c:
+        assert c._client is not None
+    assert client._client is None
+
+    # Calling aclose again when already None
+    await client.aclose()
+    assert client._client is None

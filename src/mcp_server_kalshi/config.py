@@ -41,6 +41,10 @@ class Settings(BaseSettings):
         default=None,
         description="Path to the Kalshi RSA private key PEM file (required only for authenticated tools).",
     )
+    KALSHI_READONLY: bool = Field(
+        default=False,
+        description="When true, restricts server startup strictly to read-only tools.",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

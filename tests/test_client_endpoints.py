@@ -74,3 +74,87 @@ async def test_create_order_posts_payload_when_authenticated(make_client, rsa_ke
     assert out == {"order": {"order_id": "ord_1"}}
     assert captured["path"] == "/trade-api/v2/portfolio/events/orders"
     assert captured["body"] == payload
+
+
+async def test_all_unauthenticated_and_authenticated_endpoints(
+    make_client, rsa_key_file
+):
+    client, requests = make_client(
+        lambda req: httpx.Response(200, json={"ok": True}),
+        api_key="key-id",
+        private_key_path=rsa_key_file,
+    )
+
+    # Exchange
+    await client.get_exchange_status()
+    assert requests[-1].url.path == "/trade-api/v2/exchange/status"
+
+    await client.get_exchange_schedule()
+    assert requests[-1].url.path == "/trade-api/v2/exchange/schedule"
+
+    # Markets
+    await client.get_markets({"status": "open"})
+    assert requests[-1].url.path == "/trade-api/v2/markets"
+
+    await client.get_market_trades({"ticker": "X-1"})
+    assert requests[-1].url.path == "/trade-api/v2/markets/trades"
+
+    # Candlesticks with include_latest_before_start
+    await client.get_market_candlesticks(
+        ticker="X-1",
+        start_ts=100,
+        end_ts=200,
+        period_interval=60,
+        include_latest_before_start=True,
+    )
+    assert requests[-1].url.params["include_latest_before_start"] == "true"
+
+    # Events
+    await client.get_events({"status": "open"})
+    assert requests[-1].url.path == "/trade-api/v2/events"
+
+    await client.get_event("EV-1", with_nested_markets=True)
+    assert requests[-1].url.path == "/trade-api/v2/events/EV-1"
+    assert requests[-1].url.params["with_nested_markets"] == "true"
+
+    # Series
+    await client.get_series_list({"category": "politics"})
+    assert requests[-1].url.path == "/trade-api/v2/series"
+
+    await client.get_series("SERIES-1")
+    assert requests[-1].url.path == "/trade-api/v2/series/SERIES-1"
+
+    # Portfolio
+    await client.get_balance()
+    assert requests[-1].url.path == "/trade-api/v2/portfolio/balance"
+
+    await client.get_positions({"ticker": "X-1"})
+    assert requests[-1].url.path == "/trade-api/v2/portfolio/positions"
+
+    await client.get_fills({"ticker": "X-1"})
+    assert requests[-1].url.path == "/trade-api/v2/portfolio/fills"
+
+    await client.get_settlements({"ticker": "X-1"})
+    assert requests[-1].url.path == "/trade-api/v2/portfolio/settlements"
+
+    # Orders
+    await client.get_orders({"status": "resting"})
+    assert requests[-1].url.path == "/trade-api/v2/portfolio/orders"
+
+    await client.get_order("ord-123")
+    assert requests[-1].url.path == "/trade-api/v2/portfolio/orders/ord-123"
+
+    await client.cancel_order("ord-123")
+    assert requests[-1].url.path == "/trade-api/v2/portfolio/events/orders/ord-123"
+    assert requests[-1].method == "DELETE"
+
+    await client.amend_order("ord-123", {"count": "5"})
+    assert (
+        requests[-1].url.path == "/trade-api/v2/portfolio/events/orders/ord-123/amend"
+    )
+
+    await client.decrease_order("ord-123", {"reduce_by": "1"})
+    assert (
+        requests[-1].url.path
+        == "/trade-api/v2/portfolio/events/orders/ord-123/decrease"
+    )

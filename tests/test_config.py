@@ -62,5 +62,14 @@ def test_has_credentials_and_api_key_value():
     assert partial.has_credentials is False
 
 
+def test_ws_base_url_and_readonly():
+    s = _settings(KALSHI_ENV="demo", KALSHI_READONLY=True)
+    assert s.ws_base_url == "wss://demo-api.kalshi.co/trade-api/ws/v2"
+    assert s.KALSHI_READONLY is True
+
+    s_prod = _settings(KALSHI_ENV="prod")
+    assert s_prod.ws_base_url == "wss://api.elections.kalshi.com/trade-api/ws/v2"
+
+
 def test_get_settings_is_cached():
     assert get_settings() is get_settings()

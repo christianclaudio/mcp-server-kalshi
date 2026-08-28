@@ -2,10 +2,10 @@ import asyncio
 import json
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from functools import wraps
 from importlib.metadata import PackageNotFoundError, version
-from typing import Any
+from typing import Any, cast
 
 import mcp.server.stdio
 import mcp.types as types
@@ -13,6 +13,7 @@ from mcp.server.lowlevel import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 
 from .config import get_settings
+from .errors import redact_secrets
 from .kalshi_client import KalshiAPIClient
 from .kalshi_client.client import (
     build_amend_order_payload,
@@ -48,7 +49,7 @@ from .kalshi_client.schemas import (
 
 try:
     __version__ = version("mcp-server-kalshi")
-except PackageNotFoundError:  # running from source without an install
+except PackageNotFoundError:  # pragma: no cover
     __version__ = "0.0.0"
 
 
@@ -110,16 +111,35 @@ def _serialize(result: Any) -> str:
     return json.dumps(result, indent=2, default=str)
 
 
-def _annotations(read_only: bool, destructive: bool):
+def _annotations(
+    read_only: bool,
+    destructive: bool,
+    idempotent: bool | None = None,
+    open_world: bool | None = None,
+) -> types.ToolAnnotations | None:
     """Build ToolAnnotations when the installed mcp version supports them, else None."""
     ann_cls = getattr(types, "ToolAnnotations", None)
     if ann_cls is None:
         return None
-    return ann_cls(readOnlyHint=read_only, destructiveHint=destructive)
+    kwargs: dict[str, Any] = {
+        "readOnlyHint": read_only,
+        "destructiveHint": destructive,
+    }
+    if idempotent is not None:
+        kwargs["idempotentHint"] = idempotent
+    if open_world is not None:
+        kwargs["openWorldHint"] = open_world
+    return cast(types.ToolAnnotations, ann_cls(**kwargs))
+
+
+HandlerCallable = Callable[[dict[str, Any]], Coroutine[Any, Any, Any]]
+WrappedHandler = Callable[
+    [dict[str, Any]], Coroutine[Any, Any, list[types.TextContent]]
+]
 
 
 class ToolRegistry:
-    _tools: dict[str, tuple[types.Tool, Callable]] = {}
+    _tools: dict[str, tuple[types.Tool, WrappedHandler]] = {}
 
     @classmethod
     def register_tool(
@@ -129,10 +149,14 @@ class ToolRegistry:
         input_schema: type[MCPSchemaBaseModel],
         read_only: bool = True,
         destructive: bool = False,
-    ):
-        def decorator(handler: Callable):
+        idempotent: bool | None = None,
+        open_world: bool | None = None,
+    ) -> Callable[[HandlerCallable], WrappedHandler]:
+        def decorator(handler: HandlerCallable) -> WrappedHandler:
             @wraps(handler)
-            async def wrapped_handler(request: dict) -> list[types.TextContent]:
+            async def wrapped_handler(
+                request: dict[str, Any],
+            ) -> list[types.TextContent]:
                 result = await handler(request)
                 return [types.TextContent(type="text", text=_serialize(result))]
 
@@ -141,7 +165,12 @@ class ToolRegistry:
                     name=name,
                     description=description,
                     inputSchema=input_schema.to_mcp_input_schema(),
-                    annotations=_annotations(read_only, destructive),
+                    annotations=_annotations(
+                        read_only=read_only,
+                        destructive=destructive,
+                        idempotent=idempotent,
+                        open_world=open_world,
+                    ),
                 ),
                 wrapped_handler,
             )
@@ -151,18 +180,35 @@ class ToolRegistry:
 
     @classmethod
     def get_tools(cls) -> list[types.Tool]:
+        if settings.KALSHI_READONLY:
+            return [
+                tool
+                for tool, _ in cls._tools.values()
+                if tool.annotations is not None
+                and tool.annotations.readOnlyHint is True
+            ]
         return [tool for tool, _ in cls._tools.values()]
 
     @classmethod
-    def get_handler(cls, name: str) -> Callable:
+    def get_handler(cls, name: str) -> WrappedHandler:
         if name not in cls._tools:
             raise ValueError(f"Unknown tool: {name}")
-        return cls._tools[name][1]
+        tool, handler = cls._tools[name]
+        if settings.KALSHI_READONLY:
+            if tool.annotations is None or tool.annotations.readOnlyHint is not True:
+                raise ValueError(
+                    f"Server is operating in read-only mode (KALSHI_READONLY=1); tool '{name}' is disabled."
+                )
+        return handler
 
 
-def _params(request: dict, model: type[MCPSchemaBaseModel], drop: tuple = ()) -> dict:
+def _params(
+    request: dict[str, Any],
+    model: type[MCPSchemaBaseModel],
+    drop: tuple[str, ...] = (),
+) -> dict[str, Any]:
     """Validate `request` against `model` and return query params (None + `drop` removed)."""
-    data = model(**request).model_dump(exclude_none=True)
+    data: dict[str, Any] = model(**request).model_dump(exclude_none=True)
     for key in drop:
         data.pop(key, None)
     return data
@@ -177,8 +223,12 @@ def _params(request: dict, model: type[MCPSchemaBaseModel], drop: tuple = ()) ->
         "Returns markets with prices (in dollars), status, and rules_primary."
     ),
     input_schema=ListMarketsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_list_markets(request: dict):
+async def handle_list_markets(request: dict[str, Any]) -> Any:
     return await kalshi_client.get_markets(_params(request, ListMarketsRequest))
 
 
@@ -186,8 +236,12 @@ async def handle_list_markets(request: dict):
     name="get_market",
     description="Get full detail for one market by ticker, including prices, status, and rules_primary/rules_secondary.",
     input_schema=GetMarketRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_market(request: dict):
+async def handle_get_market(request: dict[str, Any]) -> Any:
     req = GetMarketRequest(**request)
     return await kalshi_client.get_market(req.ticker)
 
@@ -196,8 +250,12 @@ async def handle_get_market(request: dict):
     name="list_events",
     description="Browse events (each groups related markets). Filter by series_ticker/status; set with_nested_markets to include markets inline.",
     input_schema=ListEventsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_list_events(request: dict):
+async def handle_list_events(request: dict[str, Any]) -> Any:
     return await kalshi_client.get_events(_params(request, ListEventsRequest))
 
 
@@ -205,8 +263,12 @@ async def handle_list_events(request: dict):
     name="get_event",
     description="Get an event by ticker, including its settlement_sources and (optionally) nested markets.",
     input_schema=GetEventRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_event(request: dict):
+async def handle_get_event(request: dict[str, Any]) -> Any:
     req = GetEventRequest(**request)
     return await kalshi_client.get_event(req.event_ticker, req.with_nested_markets)
 
@@ -215,8 +277,12 @@ async def handle_get_event(request: dict):
     name="list_series",
     description="List series (recurring market templates) filtered by category/tags.",
     input_schema=ListSeriesRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_list_series(request: dict):
+async def handle_list_series(request: dict[str, Any]) -> Any:
     return await kalshi_client.get_series_list(_params(request, ListSeriesRequest))
 
 
@@ -227,8 +293,12 @@ async def handle_list_series(request: dict):
         "additional_prohibitions, and the rules PDFs (contract_terms_url, contract_url)."
     ),
     input_schema=GetSeriesRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_series(request: dict):
+async def handle_get_series(request: dict[str, Any]) -> Any:
     req = GetSeriesRequest(**request)
     return await kalshi_client.get_series(req.series_ticker)
 
@@ -238,8 +308,12 @@ async def handle_get_series(request: dict):
     name="get_market_orderbook",
     description="Get the current order book (resting YES and NO bids) for a market. Optional depth (1-100).",
     input_schema=GetMarketOrderbookRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_market_orderbook(request: dict):
+async def handle_get_market_orderbook(request: dict[str, Any]) -> Any:
     req = GetMarketOrderbookRequest(**request)
     return await kalshi_client.get_market_orderbook(req.ticker, req.depth)
 
@@ -251,8 +325,12 @@ async def handle_get_market_orderbook(request: dict):
         "override with period_interval (1/60/1440), lookback_hours, or explicit start_ts/end_ts."
     ),
     input_schema=GetMarketCandlesticksRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_market_candlesticks(request: dict):
+async def handle_get_market_candlesticks(request: dict[str, Any]) -> Any:
     req = GetMarketCandlesticksRequest(**request)
     end_ts = req.end_ts or int(time.time())
     start_ts = req.start_ts or (end_ts - (req.lookback_hours or 24) * 3600)
@@ -269,8 +347,12 @@ async def handle_get_market_candlesticks(request: dict):
     name="get_market_trades",
     description="Get recent public trades (executions) for a market.",
     input_schema=GetMarketTradesRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_market_trades(request: dict):
+async def handle_get_market_trades(request: dict[str, Any]) -> Any:
     return await kalshi_client.get_market_trades(
         _params(request, GetMarketTradesRequest)
     )
@@ -285,21 +367,25 @@ async def handle_get_market_trades(request: dict):
         "market resolves; call fetch_rules_pdf to read the full legal contract."
     ),
     input_schema=GetMarketRulesRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_market_rules(request: dict):
+async def handle_get_market_rules(request: dict[str, Any]) -> Any:
     req = GetMarketRulesRequest(**request)
     market_resp = await kalshi_client.get_market(req.ticker)
-    market = market_resp.get("market", market_resp)
+    market: dict[str, Any] = market_resp.get("market", market_resp)
 
     series_ticker = series_ticker_from_market(req.ticker)
-    series: dict = {}
+    series: dict[str, Any] = {}
     try:
         series_resp = await kalshi_client.get_series(series_ticker)
         series = series_resp.get("series", series_resp)
     except Exception as exc:  # series lookup is best-effort
         series = {"error": f"could not load series {series_ticker}: {exc}"}
 
-    event: dict = {}
+    event: dict[str, Any] = {}
     event_ticker = market.get("event_ticker")
     if event_ticker:
         try:
@@ -337,8 +423,12 @@ async def handle_get_market_rules(request: dict):
         "series' contract_terms_url or contract_url) or a direct `url`."
     ),
     input_schema=FetchRulesPdfRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=True,
 )
-async def handle_fetch_rules_pdf(request: dict):
+async def handle_fetch_rules_pdf(request: dict[str, Any]) -> Any:
     req = FetchRulesPdfRequest(**request)
     url = req.url
     if not url:
@@ -371,13 +461,18 @@ async def handle_fetch_rules_pdf(request: dict):
         "Call this to confirm the environment before trading rather than guessing."
     ),
     input_schema=EmptyRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_environment(request: dict):
+async def handle_get_environment(request: dict[str, Any]) -> Any:
     return {
         "environment": settings.env_label,
         "is_production": settings.is_production,
         "base_url": settings.rest_base_url,
         "has_credentials": settings.has_credentials,
+        "readonly_mode": settings.KALSHI_READONLY,
         "note": (
             "Real money is at stake; orders settle for real."
             if settings.is_production
@@ -391,8 +486,12 @@ async def handle_get_environment(request: dict):
     name="get_exchange_status",
     description="Check whether the exchange and trading are currently active.",
     input_schema=EmptyRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_exchange_status(request: dict):
+async def handle_get_exchange_status(request: dict[str, Any]) -> Any:
     return await kalshi_client.get_exchange_status()
 
 
@@ -400,8 +499,12 @@ async def handle_get_exchange_status(request: dict):
     name="get_exchange_schedule",
     description="Get the exchange's standard trading hours and maintenance windows.",
     input_schema=EmptyRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_exchange_schedule(request: dict):
+async def handle_get_exchange_schedule(request: dict[str, Any]) -> Any:
     return await kalshi_client.get_exchange_schedule()
 
 
@@ -410,8 +513,12 @@ async def handle_get_exchange_schedule(request: dict):
     name="get_balance",
     description="Get your account balance and portfolio value (authenticated).",
     input_schema=EmptyRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_balance(request: dict):
+async def handle_get_balance(request: dict[str, Any]) -> Any:
     return await kalshi_client.get_balance()
 
 
@@ -419,8 +526,12 @@ async def handle_get_balance(request: dict):
     name="get_positions",
     description="List your current market positions (authenticated).",
     input_schema=GetPositionsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_positions(request: dict):
+async def handle_get_positions(request: dict[str, Any]) -> Any:
     return await kalshi_client.get_positions(_params(request, GetPositionsRequest))
 
 
@@ -428,8 +539,12 @@ async def handle_get_positions(request: dict):
     name="get_fills",
     description="List your fills (matched trades) (authenticated).",
     input_schema=GetFillsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_fills(request: dict):
+async def handle_get_fills(request: dict[str, Any]) -> Any:
     return await kalshi_client.get_fills(_params(request, GetFillsRequest))
 
 
@@ -437,8 +552,12 @@ async def handle_get_fills(request: dict):
     name="get_settlements",
     description="List your settled positions and their outcomes (authenticated).",
     input_schema=GetSettlementsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_settlements(request: dict):
+async def handle_get_settlements(request: dict[str, Any]) -> Any:
     return await kalshi_client.get_settlements(_params(request, GetSettlementsRequest))
 
 
@@ -447,8 +566,12 @@ async def handle_get_settlements(request: dict):
     name="list_orders",
     description="List your orders (resting/canceled/executed), optionally filtered (authenticated).",
     input_schema=ListOrdersRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_list_orders(request: dict):
+async def handle_list_orders(request: dict[str, Any]) -> Any:
     return await kalshi_client.get_orders(_params(request, ListOrdersRequest))
 
 
@@ -456,13 +579,17 @@ async def handle_list_orders(request: dict):
     name="get_order",
     description="Get a single order by id (authenticated).",
     input_schema=GetOrderRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_get_order(request: dict):
+async def handle_get_order(request: dict[str, Any]) -> Any:
     req = GetOrderRequest(**request)
     return await kalshi_client.get_order(req.order_id)
 
 
-def _order_preview(req: CreateOrderRequest, payload: dict) -> dict:
+def _order_preview(req: CreateOrderRequest, payload: dict[str, Any]) -> dict[str, Any]:
     est_cost_cents = req.count * req.limit_price
     return {
         "preview": True,
@@ -497,8 +624,10 @@ def _order_preview(req: CreateOrderRequest, payload: dict) -> dict:
     input_schema=CreateOrderRequest,
     read_only=False,
     destructive=True,
+    idempotent=False,
+    open_world=False,
 )
-async def handle_create_order(request: dict):
+async def handle_create_order(request: dict[str, Any]) -> Any:
     req = CreateOrderRequest(**request)
     payload = build_create_order_payload(
         ticker=req.ticker,
@@ -529,8 +658,10 @@ async def handle_create_order(request: dict):
     input_schema=CancelOrderRequest,
     read_only=False,
     destructive=True,
+    idempotent=True,
+    open_world=False,
 )
-async def handle_cancel_order(request: dict):
+async def handle_cancel_order(request: dict[str, Any]) -> Any:
     req = CancelOrderRequest(**request)
     return await kalshi_client.cancel_order(req.order_id)
 
@@ -544,8 +675,10 @@ async def handle_cancel_order(request: dict):
     input_schema=AmendOrderRequest,
     read_only=False,
     destructive=True,
+    idempotent=False,
+    open_world=False,
 )
-async def handle_amend_order(request: dict):
+async def handle_amend_order(request: dict[str, Any]) -> Any:
     req = AmendOrderRequest(**request)
     payload = build_amend_order_payload(
         ticker=req.ticker,
@@ -576,29 +709,34 @@ async def handle_amend_order(request: dict):
     input_schema=DecreaseOrderRequest,
     read_only=False,
     destructive=True,
+    idempotent=False,
+    open_world=False,
 )
-async def handle_decrease_order(request: dict):
+async def handle_decrease_order(request: dict[str, Any]) -> Any:
     req = DecreaseOrderRequest(**request)
     payload = build_decrease_order_payload(req.reduce_by, req.reduce_to)
     return await kalshi_client.decrease_order(req.order_id, payload)
 
 
 # =============================== Server wiring ===============================
-@server.list_tools()
+@server.list_tools()  # type: ignore[no-untyped-call, untyped-decorator]
 async def handle_list_tools() -> list[types.Tool]:
     return ToolRegistry.get_tools()
 
 
-@server.call_tool()
-async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent]:
-    handler = ToolRegistry.get_handler(name)
+@server.call_tool()  # type: ignore[untyped-decorator]
+async def handle_call_tool(
+    name: str, arguments: dict[str, Any] | None = None
+) -> list[types.TextContent]:
     try:
-        return await handler(arguments)
+        handler = ToolRegistry.get_handler(name)
+        return await handler(arguments or {})
     except Exception as exc:
-        return [types.TextContent(type="text", text=f"Error in {name}: {exc}")]
+        sanitized = redact_secrets(str(exc))
+        return [types.TextContent(type="text", text=f"Error in {name}: {sanitized}")]
 
 
-async def run():
+async def run() -> None:
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,
@@ -615,5 +753,9 @@ async def run():
         )
 
 
-def main():
+def main() -> None:
     asyncio.run(run())
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
