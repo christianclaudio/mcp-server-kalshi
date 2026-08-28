@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Kalshi Trade API base URLs. See https://docs.kalshi.com/getting_started/api_environments
@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     )
     KALSHI_API_KEY: SecretStr | None = Field(
         default=None,
+        validation_alias=AliasChoices("KALSHI_API_KEY", "KALSHI_API_KEY_ID"),
         description="Kalshi API key ID (required only for authenticated tools).",
     )
     KALSHI_PRIVATE_KEY_PATH: str | None = Field(
