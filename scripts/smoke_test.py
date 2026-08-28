@@ -70,7 +70,14 @@ def main() -> int:
     )
 
     out_q: queue.Queue[str | None] = queue.Queue()
+    err_lines: list[str] = []
+
+    def _err_reader(stream: IO[str]) -> None:
+        for line in stream:
+            err_lines.append(line)
+
     threading.Thread(target=_reader, args=(proc.stdout, out_q), daemon=True).start()
+    threading.Thread(target=_err_reader, args=(proc.stderr,), daemon=True).start()
 
     deadline = time.monotonic() + TIMEOUT_SECONDS
     try:
@@ -129,14 +136,16 @@ def main() -> int:
         content = (
             call_result.get("content", []) if isinstance(call_result, dict) else []
         )
-        if not content or "DEMO" not in content[0].get("text", ""):
+        first = content[0] if content else None
+        text = first.get("text", "") if isinstance(first, dict) else ""
+        if "DEMO" not in text:
             raise SystemExit(f"Unexpected tools/call result: {call_resp}")
         print("[✓] tools/call get_environment verified successfully.")
 
         print("[✓] Stdio smoke test completed with 100% success.")
         return 0
     except SystemExit as exc:
-        stderr = proc.stderr.read() if proc.stderr else ""
+        stderr = "".join(err_lines)
         print(f"SMOKE TEST FAILED: {exc}", file=sys.stderr)
         if stderr.strip():
             print("---- server stderr ----", file=sys.stderr)
