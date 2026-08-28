@@ -16,6 +16,7 @@ import time
 from typing import IO
 
 EXPECTED_SERVER_NAME = "kalshi-server"
+EXPECTED_TOOL_COUNT = 36
 TIMEOUT_SECONDS = 15
 
 
@@ -92,7 +93,11 @@ def main() -> int:
         if not isinstance(result, dict):
             raise SystemExit(f"Invalid initialize result: {init}")
 
-        name = result.get("serverInfo", {}).get("name")
+        server_info = result.get("serverInfo")
+        if not isinstance(server_info, dict):
+            raise SystemExit(f"Missing or invalid serverInfo dict: {server_info!r}")
+
+        name = server_info.get("name")
         if name != EXPECTED_SERVER_NAME:
             raise SystemExit(f"Unexpected serverInfo.name: {name!r}")
         print("[✓] JSON-RPC initialize handshake successful.")
@@ -106,8 +111,8 @@ def main() -> int:
         tools_result = tools_resp.get("result", {})
         tools = tools_result.get("tools", []) if isinstance(tools_result, dict) else []
         print(f"[✓] tools/list returned {len(tools)} tools.")
-        if len(tools) != 24:
-            raise SystemExit(f"Expected 24 tools, got {len(tools)}")
+        if len(tools) != EXPECTED_TOOL_COUNT:
+            raise SystemExit(f"Expected {EXPECTED_TOOL_COUNT} tools, got {len(tools)}")
 
         # 4. Call get_environment
         _send(

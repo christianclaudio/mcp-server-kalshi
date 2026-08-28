@@ -748,6 +748,7 @@ async def handle_batch_create_orders(request: dict[str, Any]) -> Any:
     order_payloads: list[dict[str, Any]] = []
     previews: list[dict[str, Any]] = []
     for item in req.orders:
+        client_order_id = item.client_order_id or str(uuid.uuid4())
         p = build_create_order_payload(
             ticker=item.ticker,
             action=item.action,
@@ -758,7 +759,7 @@ async def handle_batch_create_orders(request: dict[str, Any]) -> Any:
             post_only=item.post_only,
             reduce_only=item.reduce_only,
             expiration_ts=item.expiration_ts,
-            client_order_id=item.client_order_id,
+            client_order_id=client_order_id,
         )
         order_payloads.append(p)
         previews.append(

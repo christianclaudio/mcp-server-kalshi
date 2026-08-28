@@ -227,13 +227,22 @@ async def test_all_24_handlers_execute_successfully(
                         "side": "yes",
                         "count": 10,
                         "limit_price": 50,
-                    }
+                    },
+                    {
+                        "ticker": "M-1",
+                        "action": "sell",
+                        "side": "yes",
+                        "count": 5,
+                        "limit_price": 60,
+                        "client_order_id": "custom-id-123",
+                    },
                 ],
                 "confirm": True,
             }
         )
     )
     assert confirmed_batch["placed"] is True
+    assert confirmed_batch["batch_size"] == 2
 
     # 26. batch_cancel_orders
     out = handler_result(

@@ -132,14 +132,19 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 6. Confirm with user and submit: `create_order(..., confirm=True)`.
 
 ### Recipe 2: Batch Quoting & Emergency Flattening
-1. Submit batch two-sided quotes:
+1. Generate batch simulation preview (`confirm=False`):
    ```python
    batch_create_orders(orders=[
        {"ticker": "KXNBA-27-PHI", "action": "buy", "side": "yes", "count": 10, "limit_price": 50},
        {"ticker": "KXNBA-27-PHI", "action": "sell", "side": "yes", "count": 10, "limit_price": 55},
-   ], confirm=True)
+   ], confirm=False)
    ```
-2. Batch cancel resting exposure:
+2. Request explicit user confirmation with the previewed batch summary.
+3. Submit confirmed batch orders (`confirm=True`):
+   ```python
+   batch_create_orders(orders=[...], confirm=True)
+   ```
+4. Batch cancel resting exposure:
    ```python
    batch_cancel_orders(order_ids=["ord-1", "ord-2", "ord-3"])
    ```

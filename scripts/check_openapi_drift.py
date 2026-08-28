@@ -58,10 +58,25 @@ def check_drift() -> int:
         paths = spec.get("paths", {})
         print(f"[*] Fetched live OpenAPI spec with {len(paths)} documented paths.")
     except Exception as exc:
-        print(
-            f"[!] Live OpenAPI fetch skipped/failed ({exc}); verifying local route coverage map."
-        )
-        paths = {k: {} for k in CLIENT_COVERED_ROUTES}
+        print(f"[!] Failed to fetch live OpenAPI spec: {exc}")
+        return 1
+
+    # Normalize paths (strip /trade-api/v2 prefix if present)
+    normalized_paths = set()
+    for p in paths:
+        norm = p[13:] if p.startswith("/trade-api/v2") else p
+        normalized_paths.add(norm)
+
+    missing_routes: list[str] = []
+    for route, method in CLIENT_COVERED_ROUTES.items():
+        if route not in normalized_paths and route not in paths:
+            missing_routes.append(f"{route} (for {method})")
+
+    if missing_routes:
+        print(f"[!] OpenAPI drift detected! Missing {len(missing_routes)} route(s):")
+        for m in missing_routes:
+            print(f"    - {m}")
+        return 1
 
     covered_count = len(CLIENT_COVERED_ROUTES)
     print(f"[✓] KalshiAPIClient implements {covered_count} core trade v2 routes.")
