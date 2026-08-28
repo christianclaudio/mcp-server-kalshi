@@ -1,14 +1,26 @@
 .env
-*.txt
-*.egg-info
-__pycache__
-*.key
-build/
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
 dist/
+build/
+.venv/
+.pytest_cache/
 .coverage
 .coverage.*
 htmlcov/
-.pytest_cache/
+
+# Tool caches
 .mypy_cache/
 .ruff_cache/
-.venv/
+
+# Credentials & Keys
+*.pem
+*.key
+*.pfx
+
+# Local Code-Review / Test artifacts
+coderabbit-review*.txt
