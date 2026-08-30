@@ -426,6 +426,6 @@ def test_main_and_entrypoints(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_handle_shutdown() -> None:
-    with pytest.raises(SystemExit) as exc_info:
+    with patch("os._exit") as mock_exit:
         server._handle_shutdown(15, None)
-    assert exc_info.value.code == 0
+        mock_exit.assert_called_once_with(0)
