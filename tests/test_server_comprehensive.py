@@ -423,3 +423,9 @@ def test_main_and_entrypoints(monkeypatch: pytest.MonkeyPatch) -> None:
         # test calling the entry point
         mcp_server_kalshi.__main__.main()
         mock_main.assert_called_once()
+
+
+def test_handle_shutdown() -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        server._handle_shutdown(15, None)
+    assert exc_info.value.code == 0
