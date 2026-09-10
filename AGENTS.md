@@ -49,7 +49,6 @@ mcp-server-kalshi/
 ├── Dockerfile                    # Multi-stage container build running as non-root USER mcp
 ├── server.json                   # MCP Registry catalog metadata (runtimeHint: uvx, stdio transport)
 ├── pyproject.toml                # Packaging metadata, entrypoint CLI, dependency pinning
-├── COOKBOOK.md                   # Operational maintainer runbook (9-step release SOP, recipes)
 ├── AGENTS.md                     # Agent guidance map, gotchas, and conventions (this file)
 └── README.md                     # User-facing installation, quickstart, and tool index
 ```
@@ -151,4 +150,4 @@ The GitHub Actions CI matrix enforces:
 - Multi-stage Docker image build.
 - CodeQL security scan.
 
-For cutting releases, version bumps, and handling PyPI / GitHub tag workflows, refer to the step-by-step runbook in **`COOKBOOK.md`**.
+For cutting releases, version bumps, and handling PyPI / GitHub tag workflows, follow standard project guidelines.

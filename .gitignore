@@ -24,3 +24,6 @@ htmlcov/
 
 # Local Code-Review / Test artifacts
 coderabbit-review*.txt
+
+# Private runbooks & recipes
+COOKBOOK.md
