@@ -86,3 +86,21 @@ jobs:
         run: uv sync --all-extras
       - name: Stdio smoke test
         run: uv run python scripts/smoke_test.py
+
+  conformance:
+    name: MCP Protocol Conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --all-extras
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run MCP conformance suite
+        run: ./scripts/check_conformance.sh
+
