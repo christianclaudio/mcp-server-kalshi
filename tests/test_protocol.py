@@ -139,3 +139,74 @@ def test_stdio_jsonrpc_protocol_flow() -> None:
         assert call_resp["result"].get("isError") is False
     finally:
         client.close()
+
+
+async def test_stateless_streamable_http_standalone_post() -> None:
+    """Verify Streamable HTTP in stateless mode accepts standalone requests without session ID."""
+    import httpx
+
+    from mcp_server_kalshi.server import server
+
+    app = server.streamable_http_app(stateless_http=True, json_response=True)
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1:8000"
+        ) as http_client:
+            # Standalone initialize without session ID
+            init_payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2026-07-28",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test-stateless", "version": "1.0"},
+                },
+            }
+            res = await http_client.post(
+                "/mcp",
+                json=init_payload,
+                headers={"Content-Type": "application/json"},
+            )
+            assert res.status_code == 200
+            assert "Mcp-Session-Id" not in res.headers
+            data = res.json()
+            assert data["result"]["serverInfo"]["name"] == "kalshi-server"
+
+            # Standalone tools/list without prior session handshake
+            list_payload = {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/list",
+                "params": {},
+            }
+            res_list = await http_client.post(
+                "/mcp",
+                json=list_payload,
+                headers={"Content-Type": "application/json"},
+            )
+            assert res_list.status_code == 200
+            assert "Mcp-Session-Id" not in res_list.headers
+            list_data = res_list.json()
+            assert "result" in list_data
+            assert "tools" in list_data["result"]
+            assert len(list_data["result"]["tools"]) == 36
+
+            # Standalone tool call without session affinity
+            tool_payload = {
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {"name": "get_environment", "arguments": {}},
+            }
+            res_tool = await http_client.post(
+                "/mcp",
+                json=tool_payload,
+                headers={"Content-Type": "application/json"},
+            )
+            assert res_tool.status_code == 200
+            assert "Mcp-Session-Id" not in res_tool.headers
+            tool_data = res_tool.json()
+            assert "result" in tool_data
+            assert "content" in tool_data["result"]
+            assert "DEMO" in tool_data["result"]["content"][0]["text"]

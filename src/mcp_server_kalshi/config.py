@@ -46,6 +46,14 @@ class Settings(BaseSettings):
         default=False,
         description="When true, restricts server startup strictly to read-only tools.",
     )
+    KALSHI_MCP_STATELESS_HTTP: bool = Field(
+        default=False,
+        description="Enable stateless Streamable HTTP transport mode (Spec 2026-07-28 / SEP-1049).",
+    )
+    KALSHI_MCP_JSON_RESPONSE: bool = Field(
+        default=False,
+        description="Return direct application/json responses instead of SSE text/event-stream.",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

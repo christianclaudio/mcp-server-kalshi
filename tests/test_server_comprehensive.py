@@ -474,16 +474,21 @@ async def test_run_streamable_http(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_server = MagicMock()
     mock_server.serve = AsyncMock()
 
-    monkeypatch.setattr(
-        server.server, "streamable_http_app", MagicMock(return_value=mock_app)
-    )
+    mock_app_factory = MagicMock(return_value=mock_app)
+    monkeypatch.setattr(server.server, "streamable_http_app", mock_app_factory)
     monkeypatch.setattr("uvicorn.Server", MagicMock(return_value=mock_server))
 
-    await server.run_streamable_http(host="0.0.0.0", port=9000)
+    await server.run_streamable_http(
+        host="0.0.0.0", port=9000, stateless_http=True, json_response=True
+    )
+    mock_app_factory.assert_called_once_with(
+        host="0.0.0.0", stateless_http=True, json_response=True
+    )
     mock_server.serve.assert_called_once()
 
 
 def test_main_streamable_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 1. Default stateful
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -499,7 +504,40 @@ def test_main_streamable_http(monkeypatch: pytest.MonkeyPatch) -> None:
     run_streamable_mock = AsyncMock()
     monkeypatch.setattr(server, "run_streamable_http", run_streamable_mock)
     server.main()
-    run_streamable_mock.assert_called_once_with(host="127.0.0.1", port=9000)
+    run_streamable_mock.assert_called_once_with(
+        host="127.0.0.1", port=9000, stateless_http=False, json_response=False
+    )
+
+    # 2. Explicit stateless + json_response
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "mcp-server-kalshi",
+            "--transport",
+            "streamable-http",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "8080",
+            "--stateless",
+            "--json-response",
+        ],
+    )
+    run_streamable_mock.reset_mock()
+    server.main()
+    run_streamable_mock.assert_called_once_with(
+        host="0.0.0.0", port=8080, stateless_http=True, json_response=True
+    )
+
+    # 3. stdio with stateless flags triggers warnings
+    monkeypatch.setattr(
+        "sys.argv",
+        ["mcp-server-kalshi", "--transport", "stdio", "--stateless", "--json-response"],
+    )
+    run_stdio_mock = AsyncMock()
+    monkeypatch.setattr(server, "run", run_stdio_mock)
+    server.main()
+    run_stdio_mock.assert_called_once()
 
 
 async def test_handle_list_series_truncation(monkeypatch: pytest.MonkeyPatch) -> None:
