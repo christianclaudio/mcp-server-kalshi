@@ -323,7 +323,22 @@ async def handle_get_event(request: dict[str, Any]) -> Any:
     open_world=False,
 )
 async def handle_list_series(request: dict[str, Any]) -> Any:
-    return await kalshi_client.get_series_list(_params(request, ListSeriesRequest))
+    result = await kalshi_client.get_series_list(_params(request, ListSeriesRequest))
+    if (
+        isinstance(result, dict)
+        and "series" in result
+        and isinstance(result["series"], list)
+    ):
+        if len(result["series"]) > 50:
+            total = len(result["series"])
+            result["series"] = result["series"][:50]
+            result["truncated"] = True
+            result["total_series_count"] = total
+            result["note"] = (
+                f"Result capped to 50 items (out of {total}) to protect MCP buffer limits. "
+                "Specify category or tags filter to narrow results."
+            )
+    return result
 
 
 @ToolRegistry.register_tool(
