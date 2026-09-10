@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import json
+import logging
 import os
 import signal
 import time
@@ -1038,12 +1039,21 @@ async def run_stdio() -> None:
         )
 
 
-async def run_streamable_http(host: str = "127.0.0.1", port: int = 8000) -> None:
+async def run_streamable_http(
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    stateless_http: bool = False,
+    json_response: bool = False,
+) -> None:
     import uvicorn
 
     server.version = __version__
     server.instructions = KALSHI_BACKGROUND_INFO
-    starlette_app = server.streamable_http_app(host=host)
+    starlette_app = server.streamable_http_app(
+        host=host,
+        stateless_http=stateless_http,
+        json_response=json_response,
+    )
     config = uvicorn.Config(
         starlette_app,
         host=host,
@@ -1084,10 +1094,42 @@ def main() -> None:
         default=8000,
         help="Port for streamable-http (default: 8000).",
     )
+    parser.add_argument(
+        "--stateless",
+        action="store_true",
+        default=settings.KALSHI_MCP_STATELESS_HTTP,
+        help=(
+            "Run Streamable HTTP in stateless mode "
+            "(fresh connection per request, no Mcp-Session-Id)."
+        ),
+    )
+    parser.add_argument(
+        "--json-response",
+        action="store_true",
+        default=settings.KALSHI_MCP_JSON_RESPONSE,
+        help="Return direct JSON responses instead of SSE text/event-stream over Streamable HTTP.",
+    )
     args, _ = parser.parse_known_args()
 
+    if args.transport != "streamable-http":
+        if args.stateless:
+            logging.getLogger(__name__).warning(
+                "--stateless flag is only applicable to 'streamable-http' transport."
+            )
+        if args.json_response:
+            logging.getLogger(__name__).warning(
+                "--json-response flag is only applicable to 'streamable-http' transport."
+            )
+
     if args.transport == "streamable-http":
-        asyncio.run(run_streamable_http(host=args.host, port=args.port))
+        asyncio.run(
+            run_streamable_http(
+                host=args.host,
+                port=args.port,
+                stateless_http=args.stateless,
+                json_response=args.json_response,
+            )
+        )
     else:
         asyncio.run(run())
 
