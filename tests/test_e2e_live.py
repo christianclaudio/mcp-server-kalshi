@@ -171,9 +171,8 @@ async def test_all_discovered_kalshi_tools_live() -> None:
                 assert not text.startswith(f"Error in {name}:") or "404" in text
                 status = "PASS (Live Scoreboard Endpoint Checked)"
             else:
-                assert not text.startswith(
-                    f"Error in {name}:"
-                ), f"Tool {name} returned error: {text}"
+                err_msg = f"Tool {name} returned error: {text}"
+                assert not text.startswith(f"Error in {name}:"), err_msg
                 status = "PASS (Live Payload OK)"
 
             results.append({"tool": name, "status": status, "latency_ms": dur})
