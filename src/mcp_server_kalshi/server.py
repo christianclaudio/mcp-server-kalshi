@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import json
 import os
@@ -135,15 +136,26 @@ def _annotations(
     ann_cls = getattr(types, "ToolAnnotations", None)
     if ann_cls is None:
         return None
-    kwargs: dict[str, Any] = {
-        "readOnlyHint": read_only,
-        "destructiveHint": destructive,
-    }
-    if idempotent is not None:
-        kwargs["idempotentHint"] = idempotent
-    if open_world is not None:
-        kwargs["openWorldHint"] = open_world
-    return cast(types.ToolAnnotations, ann_cls(**kwargs))
+    try:
+        kwargs: dict[str, Any] = {
+            "read_only_hint": read_only,
+            "destructive_hint": destructive,
+        }
+        if idempotent is not None:
+            kwargs["idempotent_hint"] = idempotent
+        if open_world is not None:
+            kwargs["open_world_hint"] = open_world
+        return cast(types.ToolAnnotations, ann_cls(**kwargs))
+    except (TypeError, ValueError):
+        legacy_kwargs: dict[str, Any] = {
+            "readOnlyHint": read_only,
+            "destructiveHint": destructive,
+        }
+        if idempotent is not None:
+            legacy_kwargs["idempotentHint"] = idempotent
+        if open_world is not None:
+            legacy_kwargs["openWorldHint"] = open_world
+        return cast(types.ToolAnnotations, ann_cls(**legacy_kwargs))
 
 
 HandlerCallable = Callable[[dict[str, Any]], Coroutine[Any, Any, Any]]
@@ -178,7 +190,7 @@ class ToolRegistry:
                 types.Tool(
                     name=name,
                     description=description,
-                    inputSchema=input_schema.to_mcp_input_schema(),
+                    input_schema=input_schema.to_mcp_input_schema(),
                     annotations=_annotations(
                         read_only=read_only,
                         destructive=destructive,
@@ -199,7 +211,12 @@ class ToolRegistry:
                 tool
                 for tool, _ in cls._tools.values()
                 if tool.annotations is not None
-                and tool.annotations.readOnlyHint is True
+                and getattr(
+                    tool.annotations,
+                    "read_only_hint",
+                    getattr(tool.annotations, "readOnlyHint", False),
+                )
+                is True
             ]
         return [tool for tool, _ in cls._tools.values()]
 
@@ -209,7 +226,16 @@ class ToolRegistry:
             raise ValueError(f"Unknown tool: {name}")
         tool, handler = cls._tools[name]
         if settings.KALSHI_READONLY:
-            if tool.annotations is None or tool.annotations.readOnlyHint is not True:
+            is_ro = (
+                getattr(
+                    tool.annotations,
+                    "read_only_hint",
+                    getattr(tool.annotations, "readOnlyHint", False),
+                )
+                if tool.annotations is not None
+                else False
+            )
+            if not is_ro:
                 raise ValueError(
                     f"Server is operating in read-only mode (KALSHI_READONLY=1); tool '{name}' is disabled."
                 )
@@ -947,12 +973,10 @@ async def handle_cancel_order_group(request: dict[str, Any]) -> Any:
 
 
 # =============================== Server wiring ===============================
-@server.list_tools()  # type: ignore[no-untyped-call, untyped-decorator]
 async def handle_list_tools() -> list[types.Tool]:
     return ToolRegistry.get_tools()
 
 
-@server.call_tool()  # type: ignore[untyped-decorator]
 async def handle_call_tool(
     name: str, arguments: dict[str, Any] | None = None
 ) -> list[types.TextContent]:
@@ -964,7 +988,25 @@ async def handle_call_tool(
         return [types.TextContent(type="text", text=f"Error in {name}: {sanitized}")]
 
 
-async def run() -> None:
+async def _req_list_tools(
+    ctx: Any, params: types.PaginatedRequestParams | None = None
+) -> types.ListToolsResult:
+    return types.ListToolsResult(tools=await handle_list_tools())
+
+
+async def _req_call_tool(
+    ctx: Any, params: types.CallToolRequestParams
+) -> types.CallToolResult:
+    content = await handle_call_tool(params.name, params.arguments)
+    is_error = bool(content and content[0].text.startswith(f"Error in {params.name}:"))
+    return types.CallToolResult(content=cast(Any, content), is_error=is_error)
+
+
+server.add_request_handler("tools/list", types.PaginatedRequestParams, _req_list_tools)
+server.add_request_handler("tools/call", types.CallToolRequestParams, _req_call_tool)
+
+
+async def run_stdio() -> None:
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,
@@ -981,6 +1023,25 @@ async def run() -> None:
         )
 
 
+async def run_streamable_http(host: str = "127.0.0.1", port: int = 8000) -> None:
+    import uvicorn
+
+    server.version = __version__
+    server.instructions = KALSHI_BACKGROUND_INFO
+    starlette_app = server.streamable_http_app(host=host)
+    config = uvicorn.Config(
+        starlette_app,
+        host=host,
+        port=port,
+        log_level="info",
+    )
+    uv_server = uvicorn.Server(config)
+    await uv_server.serve()
+
+
+run = run_stdio
+
+
 def _handle_shutdown(signum: int, frame: Any) -> None:
     """Gracefully handle SIGTERM/SIGINT from host supervisor to exit with status 0 immediately."""
     os._exit(0)
@@ -989,7 +1050,31 @@ def _handle_shutdown(signum: int, frame: Any) -> None:
 def main() -> None:
     signal.signal(signal.SIGTERM, _handle_shutdown)
     signal.signal(signal.SIGINT, _handle_shutdown)
-    asyncio.run(run())
+
+    parser = argparse.ArgumentParser(description="Kalshi MCP Server (Spec 2026-07-28)")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "streamable-http"],
+        default="stdio",
+        help="Transport protocol: 'stdio' (default) or 'streamable-http'.",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host for streamable-http (default: 127.0.0.1).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port for streamable-http (default: 8000).",
+    )
+    args, _ = parser.parse_known_args()
+
+    if args.transport == "streamable-http":
+        asyncio.run(run_streamable_http(host=args.host, port=args.port))
+    else:
+        asyncio.run(run())
 
 
 if __name__ == "__main__":  # pragma: no cover

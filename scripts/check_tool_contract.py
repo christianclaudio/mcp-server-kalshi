@@ -261,9 +261,9 @@ def verify_tool_contracts() -> int:
             print(f"[!] Tool '{name}' missing description")
             errors += 1
 
-        # Verify inputSchema
-        schema = tool.inputSchema
-        if schema.get("type") != "object" or "properties" not in schema:
+        # Verify inputSchema / input_schema
+        schema = getattr(tool, "input_schema", getattr(tool, "inputSchema", None))
+        if not schema or schema.get("type") != "object" or "properties" not in schema:
             print(f"[!] Tool '{name}' has invalid inputSchema")
             errors += 1
 
@@ -274,24 +274,28 @@ def verify_tool_contracts() -> int:
             errors += 1
             continue
 
-        if getattr(ann, "readOnlyHint", None) != expected["readOnly"]:
+        ro = getattr(ann, "read_only_hint", getattr(ann, "readOnlyHint", None))
+        if ro != expected["readOnly"]:
             print(
-                f"[!] Tool '{name}' readOnlyHint mismatch: expected {expected['readOnly']}, got {getattr(ann, 'readOnlyHint', None)}"
+                f"[!] Tool '{name}' readOnlyHint mismatch: expected {expected['readOnly']}, got {ro}"
             )
             errors += 1
-        if getattr(ann, "destructiveHint", None) != expected["destructive"]:
+        dest = getattr(ann, "destructive_hint", getattr(ann, "destructiveHint", None))
+        if dest != expected["destructive"]:
             print(
-                f"[!] Tool '{name}' destructiveHint mismatch: expected {expected['destructive']}, got {getattr(ann, 'destructiveHint', None)}"
+                f"[!] Tool '{name}' destructiveHint mismatch: expected {expected['destructive']}, got {dest}"
             )
             errors += 1
-        if getattr(ann, "idempotentHint", None) != expected["idempotent"]:
+        idem = getattr(ann, "idempotent_hint", getattr(ann, "idempotentHint", None))
+        if idem != expected["idempotent"]:
             print(
-                f"[!] Tool '{name}' idempotentHint mismatch: expected {expected['idempotent']}, got {getattr(ann, 'idempotentHint', None)}"
+                f"[!] Tool '{name}' idempotentHint mismatch: expected {expected['idempotent']}, got {idem}"
             )
             errors += 1
-        if getattr(ann, "openWorldHint", None) != expected["openWorld"]:
+        ow = getattr(ann, "open_world_hint", getattr(ann, "openWorldHint", None))
+        if ow != expected["openWorld"]:
             print(
-                f"[!] Tool '{name}' openWorldHint mismatch: expected {expected['openWorld']}, got {getattr(ann, 'openWorldHint', None)}"
+                f"[!] Tool '{name}' openWorldHint mismatch: expected {expected['openWorld']}, got {ow}"
             )
             errors += 1
 

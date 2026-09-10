@@ -386,12 +386,14 @@ def test_annotations_variations(monkeypatch: pytest.MonkeyPatch) -> None:
     import mcp.types as t
 
     ann1 = server._annotations(read_only=True, destructive=False)
-    assert ann1 is not None and ann1.readOnlyHint is True
+    ro1 = getattr(ann1, "read_only_hint", getattr(ann1, "readOnlyHint", None))
+    assert ann1 is not None and ro1 is True
 
     ann2 = server._annotations(
         read_only=False, destructive=True, idempotent=True, open_world=True
     )
-    assert ann2 is not None and ann2.destructiveHint is True
+    dest2 = getattr(ann2, "destructive_hint", getattr(ann2, "destructiveHint", None))
+    assert ann2 is not None and dest2 is True
 
     monkeypatch.setattr(t, "ToolAnnotations", None, raising=False)
     ann_none = server._annotations(
@@ -429,3 +431,72 @@ def test_handle_shutdown() -> None:
     with patch("os._exit") as mock_exit:
         server._handle_shutdown(15, None)
         mock_exit.assert_called_once_with(0)
+
+
+def test_annotations_legacy_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    class LegacyAnnotations:
+        def __init__(self, **kwargs: Any) -> None:
+            if any("_hint" in k for k in kwargs):
+                raise TypeError("unexpected keyword argument")
+            self.kwargs = kwargs
+
+    monkeypatch.setattr(server.types, "ToolAnnotations", LegacyAnnotations)
+    res: Any = server._annotations(
+        read_only=True, destructive=False, idempotent=True, open_world=True
+    )
+    assert res.kwargs["readOnlyHint"] is True
+    assert res.kwargs["destructiveHint"] is False
+    assert res.kwargs["idempotentHint"] is True
+    assert res.kwargs["openWorldHint"] is True
+
+    res2: Any = server._annotations(read_only=True, destructive=False)
+    assert "idempotentHint" not in res2.kwargs
+    assert "openWorldHint" not in res2.kwargs
+
+
+async def test_req_handlers() -> None:
+    res = await server._req_list_tools(None)
+    assert len(res.tools) > 0
+
+    call_res = await server._req_call_tool(
+        None, server.types.CallToolRequestParams(name="get_environment", arguments={})
+    )
+    assert call_res.is_error is False
+
+    err_res = await server._req_call_tool(
+        None, server.types.CallToolRequestParams(name="unknown_tool", arguments={})
+    )
+    assert err_res.is_error is True
+
+
+async def test_run_streamable_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_app = MagicMock()
+    mock_server = MagicMock()
+    mock_server.serve = AsyncMock()
+
+    monkeypatch.setattr(
+        server.server, "streamable_http_app", MagicMock(return_value=mock_app)
+    )
+    monkeypatch.setattr("uvicorn.Server", MagicMock(return_value=mock_server))
+
+    await server.run_streamable_http(host="0.0.0.0", port=9000)
+    mock_server.serve.assert_called_once()
+
+
+def test_main_streamable_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "mcp-server-kalshi",
+            "--transport",
+            "streamable-http",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "9000",
+        ],
+    )
+    run_streamable_mock = AsyncMock()
+    monkeypatch.setattr(server, "run_streamable_http", run_streamable_mock)
+    server.main()
+    run_streamable_mock.assert_called_once_with(host="127.0.0.1", port=9000)
