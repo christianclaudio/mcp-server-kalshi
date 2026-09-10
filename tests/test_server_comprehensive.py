@@ -500,3 +500,24 @@ def test_main_streamable_http(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(server, "run_streamable_http", run_streamable_mock)
     server.main()
     run_streamable_mock.assert_called_once_with(host="127.0.0.1", port=9000)
+
+
+async def test_handle_list_series_truncation(monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_series = [{"ticker": f"SERIES-{i}"} for i in range(75)]
+    monkeypatch.setattr(
+        server.kalshi_client,
+        "get_series_list",
+        AsyncMock(return_value={"series": mock_series}),
+    )
+    out = handler_result(await server.handle_list_series({}))
+    assert out["truncated"] is True
+    assert out["total_series_count"] == 75
+    assert len(out["series"]) == 50
+    assert "capped to 50 items" in out["note"]
+
+    monkeypatch.setattr(
+        server.kalshi_client,
+        "get_series_list",
+        AsyncMock(return_value={}),
+    )
+    assert handler_result(await server.handle_list_series({})) == {}
