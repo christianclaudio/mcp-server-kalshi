@@ -33,14 +33,14 @@ mcp-server-kalshi/
 │   │   └── pdf.py                # fetch_pdf_text() — download and extract contract-terms PDF
 ├── scripts/
 │   ├── check_tool_contract.py    # AST/reflection contract verifying 36 tools & MCP 2.0 annotations
-│   ├── check_openapi_drift.py    # AST visitor checking client methods against upstream Kalshi OpenAPI spec
-│   └── smoke_test.py             # Stdio JSON-RPC protocol handshake verification
+│   └── check_openapi_drift.py    # AST visitor checking client methods against upstream Kalshi OpenAPI spec
 ├── tests/
 │   ├── conftest.py               # Shared fixtures and mock HTTP transports (offline only)
 │   ├── test_auth.py              # RSA-PSS signing format and query string exclusion tests
 │   ├── test_client_endpoints.py  # Unit tests for API client methods
 │   ├── test_orders.py            # Order translation, inversion, and confirm-gate tests
 │   ├── test_handlers.py          # Tool handler execution tests
+│   ├── test_protocol.py          # Wire-level stdio & stateless streamable HTTP protocol verification
 │   └── test_server_comprehensive.py # Comprehensive MCP server lifecycle and registry tests
 ├── .github/workflows/
 │   ├── ci.yml                    # Multi-job matrix: lint, py3.10-3.13 tests, contracts, CodeQL, docker build
@@ -131,8 +131,8 @@ uv run python scripts/check_tool_contract.py
 # Upstream OpenAPI / route drift check
 uv run python scripts/check_openapi_drift.py
 
-# Stdio JSON-RPC protocol smoke test
-uv run python scripts/smoke_test.py
+# Protocol integration tests (stdio handshake & stateless streamable HTTP)
+uv run pytest tests/test_protocol.py
 
 # Local pre-commit CodeRabbit CLI review
 coderabbit review --agent --uncommitted
