@@ -1,7 +1,7 @@
 import asyncio
 import json
-import os
 import signal
+import sys
 import time
 import uuid
 from collections.abc import Callable
@@ -620,8 +620,8 @@ async def run():
 
 
 def _handle_shutdown(signum: int, frame: Any) -> None:
-    """Gracefully handle SIGTERM/SIGINT from host supervisor to exit with status 0 immediately."""
-    os._exit(0)
+    """Gracefully handle SIGTERM/SIGINT from host supervisor."""
+    sys.exit(0)
 
 
 def main() -> None:

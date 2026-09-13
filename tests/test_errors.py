@@ -1,6 +1,7 @@
-"""Tests for credential scrubbing and KalshiAPIError sanitization."""
+import pytest
 
 from mcp_server_kalshi.errors import KalshiAPIError, redact_secrets
+from mcp_server_kalshi.server import _handle_shutdown
 
 
 def test_redact_secrets_empty_or_none():
@@ -50,3 +51,9 @@ def test_kalshi_api_error_sanitization():
         body={"error": "invalid parameter"},
     )
     assert "invalid parameter" in str(dict_err)
+
+
+def test_handle_shutdown_graceful_exit():
+    with pytest.raises(SystemExit) as exc_info:
+        _handle_shutdown(15, None)
+    assert exc_info.value.code == 0

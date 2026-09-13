@@ -36,6 +36,11 @@ class ClientCall:
     body_keys: set[str] = field(default_factory=set)
     line_number: int = 0
 
+    @property
+    def path(self) -> str:
+        """Alias for raw_path."""
+        return self.raw_path
+
 
 @dataclass
 class SpecEndpoint:
@@ -291,14 +296,14 @@ def check_drift(
         # Route-level deprecation
         if endpoint.is_deprecated_route:
             warnings.append(
-                f"Client calls deprecated route: {call.method} {call.path} at line {call.line_number}"
+                f"Client calls deprecated route: {call.method} {call.raw_path} at line {call.line_number}"
             )
 
         # Parameter-level deprecation
         for param in call.query_params:
             if param in endpoint.deprecated_params:
                 errors.append(
-                    f"Client passes DEPRECATED parameter '{param}' in {call.method} {call.path} "
+                    f"Client passes DEPRECATED parameter '{param}' in {call.method} {call.raw_path} "
                     f"at line {call.line_number}"
                 )
 
