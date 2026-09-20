@@ -112,9 +112,19 @@ def test_get_current_version(tmp_path: Path) -> None:
     pyproject.write_text('version = "2.3.4"\n', encoding="utf-8")
     assert get_current_version(tmp_path) == "2.3.4"
 
+    pyproject_zero = tmp_path / "zero"
+    pyproject_zero.mkdir()
+    (pyproject_zero / "pyproject.toml").write_text('version = "0.0.0"\n', encoding="utf-8")
+    assert get_current_version(pyproject_zero) == "0.0.0"
+
     empty_dir = tmp_path / "empty"
     empty_dir.mkdir()
-    assert get_current_version(empty_dir) == "0.0.0"
+    assert get_current_version(empty_dir) is None
+
+    no_ver_dir = tmp_path / "no_ver"
+    no_ver_dir.mkdir()
+    (no_ver_dir / "pyproject.toml").write_text('description = "test"\n', encoding="utf-8")
+    assert get_current_version(no_ver_dir) is None
 
 
 def test_get_latest_tag(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -129,14 +139,10 @@ def test_get_latest_tag(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert get_latest_tag() is None
 
-    mock_run.side_effect = subprocess.CalledProcessError(
-        1, "git", stderr="fatal: No tags can describe"
-    )
+    mock_run.side_effect = subprocess.CalledProcessError(1, "git", stderr="fatal: No tags can describe")
     assert get_latest_tag() is None
 
-    mock_run.side_effect = subprocess.CalledProcessError(
-        2, "git", stderr="fatal: repository corrupted"
-    )
+    mock_run.side_effect = subprocess.CalledProcessError(2, "git", stderr="fatal: repository corrupted")
     with pytest.raises(subprocess.CalledProcessError):
         get_latest_tag()
 
@@ -153,9 +159,7 @@ def test_get_commits_since_tag(monkeypatch: pytest.MonkeyPatch) -> None:
         get_commits_since_tag("v1.0.0")
 
 
-def test_main_cli(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_cli(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     """Verify CLI entrypoint with both standard and JSON output."""
     monkeypatch.setattr("sys.argv", ["determine_bump.py"])
     code = main()
@@ -170,9 +174,7 @@ def test_main_cli(
     assert '"bump_type"' in captured_json.out
 
 
-def test_main_cli_git_error(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_cli_git_error(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     """Verify CLI exits with code 1 when git command fails."""
     monkeypatch.setattr("sys.argv", ["determine_bump.py"])
 
@@ -186,9 +188,7 @@ def test_main_cli_git_error(
     assert "Error executing git command" in captured.err
 
 
-def test_main_cli_all_commit_categories(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_cli_all_commit_categories(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     """Verify CLI prints all commit categories (breaking, features, fixes, others)."""
     monkeypatch.setattr("sys.argv", ["determine_bump.py"])
     monkeypatch.setattr("scripts.determine_bump.get_latest_tag", lambda: "v1.0.0")
@@ -210,9 +210,7 @@ def test_main_cli_all_commit_categories(
     assert "Maintenance/other (1):" in captured.out
 
 
-def test_main_cli_empty_commits(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_cli_empty_commits(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     """Verify CLI prints when no commits since tag."""
     monkeypatch.setattr("sys.argv", ["determine_bump.py"])
     monkeypatch.setattr("scripts.determine_bump.get_latest_tag", lambda: None)
@@ -223,9 +221,7 @@ def test_main_cli_empty_commits(
     assert "None (initial release)" in captured.out
 
 
-def test_get_repo_root_git_success(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_get_repo_root_git_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Verify get_repo_root returns toplevel path when git rev-parse succeeds."""
     mock_run = MagicMock()
     mock_run.return_value = MagicMock(stdout=f"{tmp_path}\n")
@@ -233,9 +229,7 @@ def test_get_repo_root_git_success(
     assert get_repo_root() == tmp_path
 
 
-def test_get_repo_root_fallback_pyproject(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_get_repo_root_fallback_pyproject(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Verify get_repo_root falls back to parent directory containing pyproject.toml."""
     mock_run = MagicMock(side_effect=subprocess.CalledProcessError(1, "git"))
     monkeypatch.setattr(subprocess, "run", mock_run)
@@ -249,9 +243,7 @@ def test_get_repo_root_fallback_pyproject(
     assert get_repo_root() == project_dir
 
 
-def test_get_repo_root_fallback_no_pyproject(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_get_repo_root_fallback_no_pyproject(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Verify get_repo_root falls back to cwd when no pyproject.toml exists in ancestry."""
     mock_run = MagicMock(side_effect=subprocess.CalledProcessError(1, "git"))
     monkeypatch.setattr(subprocess, "run", mock_run)
@@ -262,14 +254,10 @@ def test_get_repo_root_fallback_no_pyproject(
     assert get_repo_root() == empty_dir
 
 
-def test_main_cli_missing_pyproject(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_cli_missing_pyproject(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     """Verify CLI exits with code 1 when pyproject.toml cannot provide a valid version."""
     monkeypatch.setattr("sys.argv", ["determine_bump.py"])
-    monkeypatch.setattr(
-        "scripts.determine_bump.get_current_version", lambda _root: "0.0.0"
-    )
+    monkeypatch.setattr("scripts.determine_bump.get_current_version", lambda _root: None)
     code = main()
     assert code == 1
     captured = capsys.readouterr()
