@@ -154,7 +154,9 @@ def main() -> int:
     repo_root = get_repo_root()
     current_version = get_current_version(repo_root)
     if current_version is None:
-        sys.stderr.write("Error: Could not locate pyproject.toml with a valid version.\n")
+        sys.stderr.write(
+            "Error: Could not locate pyproject.toml with a valid version.\n"
+        )
         return 1
 
     try:
