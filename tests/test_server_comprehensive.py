@@ -486,7 +486,10 @@ async def test_run_streamable_http(monkeypatch: pytest.MonkeyPatch) -> None:
         host="0.0.0.0", port=9000, stateless_http=True, json_response=True
     )
     mock_app_factory.assert_called_once_with(
-        host="0.0.0.0", stateless_http=True, json_response=True
+        host="0.0.0.0",
+        stateless_http=True,
+        json_response=True,
+        allowed_hosts=["0.0.0.0", "localhost", "0.0.0.0:9000", "localhost:9000"],
     )
     mock_server.serve.assert_called_once()
 

@@ -1196,13 +1196,14 @@ async def run_streamable_http(
 
     server.version = __version__
     server.instructions = KALSHI_BACKGROUND_INFO
+    if allowed_hosts is None:
+        allowed_hosts = [host, "localhost", f"{host}:{port}", f"localhost:{port}"]
     kwargs: dict[str, Any] = {
         "host": host,
         "stateless_http": stateless_http,
         "json_response": json_response,
+        "allowed_hosts": allowed_hosts,
     }
-    if allowed_hosts is not None:
-        kwargs["allowed_hosts"] = allowed_hosts
     if allowed_origins is not None:
         kwargs["allowed_origins"] = allowed_origins
     starlette_app = server.streamable_http_app(**kwargs)
