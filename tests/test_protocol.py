@@ -210,3 +210,23 @@ async def test_stateless_streamable_http_standalone_post() -> None:
             assert "result" in tool_data
             assert "content" in tool_data["result"]
             assert "DEMO" in tool_data["result"]["content"][0]["text"]
+
+
+async def test_fastmcp_in_memory_client() -> None:
+    """Verify FastMCP 4 in-memory Client(mcp) can initialize, list tools, and call tools."""
+    from fastmcp import Client
+
+    from mcp_server_kalshi.server import mcp
+
+    async with Client(mcp) as client:
+        tools = await client.list_tools()
+        assert len(tools) == 36
+        tool_names = {t.name for t in tools}
+        assert "get_environment" in tool_names
+        assert "list_markets" in tool_names
+
+        res = await client.call_tool("get_environment", {})
+        assert res is not None
+        assert res.is_error is False
+        assert len(res.content) > 0
+        assert "DEMO" in res.content[0].text

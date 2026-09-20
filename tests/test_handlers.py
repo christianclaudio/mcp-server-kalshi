@@ -63,7 +63,9 @@ def test_registry_exposes_exactly_the_expected_tools():
 
 def test_every_tool_has_a_valid_input_schema():
     for tool in server.ToolRegistry.get_tools():
-        schema = getattr(tool, "input_schema", getattr(tool, "inputSchema", None))
+        schema = getattr(tool, "input_schema", None)
+        if schema is None:
+            schema = getattr(tool, "inputSchema", None)
         assert schema is not None, tool.name
         assert schema["type"] == "object", tool.name
         assert isinstance(schema["properties"], dict), tool.name

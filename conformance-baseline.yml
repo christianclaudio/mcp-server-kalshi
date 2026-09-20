@@ -6,10 +6,9 @@
 #    (in-protocol logging/setLevel, server-initiated sampling)
 # 2. Synthetic test fixtures defined by the conformance suite specification
 #    (e.g. test_audio_content, test://static-text, test_simple_prompt)
-#    which are not part of the Kalshi prediction market domain schema.
+#    which are not part of this production server domain schema.
 
 server:
-  - logging-set-level
   - completion-complete
   - tools-call-image
   - tools-call-audio
@@ -21,13 +20,11 @@ server:
   - tools-call-elicitation
   - elicitation-sep1034-defaults
   - elicitation-sep1330-enums
-  - resources-list
   - resources-read-text
   - resources-read-binary
   - resources-templates-read
   - resources-subscribe
   - resources-unsubscribe
-  - prompts-list
   - prompts-get-simple
   - prompts-get-with-args
   - prompts-get-embedded-resource
