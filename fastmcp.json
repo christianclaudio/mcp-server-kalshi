@@ -1,0 +1,21 @@
+{
+  "$schema": "https://gofastmcp.com/public/schemas/fastmcp.json/v1.json",
+  "source": {
+    "path": "src/mcp_server_kalshi/server.py",
+    "entrypoint": "mcp"
+  },
+  "environment": {
+    "dependencies": [
+      "fastmcp>=4.0.5",
+      "mcp>=2.2.0",
+      "httpx>=0.28.1",
+      "cryptography>=50.0.0",
+      "pydantic>=2.12.0",
+      "pydantic-settings>=2.11.0"
+    ]
+  },
+  "deployment": {
+    "transport": "stdio",
+    "log_level": "INFO"
+  }
+}

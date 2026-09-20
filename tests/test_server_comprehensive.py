@@ -386,13 +386,17 @@ def test_annotations_variations(monkeypatch: pytest.MonkeyPatch) -> None:
     import mcp.types as t
 
     ann1 = server._annotations(read_only=True, destructive=False)
-    ro1 = getattr(ann1, "read_only_hint", getattr(ann1, "readOnlyHint", None))
+    ro1 = getattr(ann1, "read_only_hint", None)
+    if ro1 is None:
+        ro1 = getattr(ann1, "readOnlyHint", None)
     assert ann1 is not None and ro1 is True
 
     ann2 = server._annotations(
         read_only=False, destructive=True, idempotent=True, open_world=True
     )
-    dest2 = getattr(ann2, "destructive_hint", getattr(ann2, "destructiveHint", None))
+    dest2 = getattr(ann2, "destructive_hint", None)
+    if dest2 is None:
+        dest2 = getattr(ann2, "destructiveHint", None)
     assert ann2 is not None and dest2 is True
 
     monkeypatch.setattr(t, "ToolAnnotations", None, raising=False)
@@ -559,3 +563,151 @@ async def test_handle_list_series_truncation(monkeypatch: pytest.MonkeyPatch) ->
         AsyncMock(return_value={}),
     )
     assert handler_result(await server.handle_list_series({})) == {}
+
+
+async def test_server_lifespan(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mcp_server_kalshi.server import mcp, server_lifespan
+
+    async with server_lifespan(mcp) as state:
+        assert "client" in state
+        assert state["client"] is not None
+
+    monkeypatch.setattr(server, "kalshi_client", None)
+    async with server_lifespan(mcp) as state_none:
+        assert state_none["client"] is None
+
+
+def test_is_read_only_variations() -> None:
+    from types import SimpleNamespace
+
+    assert server._is_read_only(None) is False
+    assert (
+        server._is_read_only(SimpleNamespace(read_only_hint=None, readOnlyHint=True))
+        is True
+    )
+    assert (
+        server._is_read_only(SimpleNamespace(read_only_hint=None, readOnlyHint=False))
+        is False
+    )
+
+
+async def test_fastmcp_version_and_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    server.mcp.version = "9.9.9"
+    assert server.mcp.version == "9.9.9"
+    server.mcp.version = None
+    assert server.mcp.version == server.__version__
+
+    monkeypatch.setattr(server.settings, "KALSHI_READONLY", True)
+    ro_tools = await server.mcp.list_tools()
+    assert len(ro_tools) == 29
+
+    server.mcp.add_request_handler(
+        "test/ping", server.types.PaginatedRequestParams, AsyncMock()
+    )
+
+    with patch.object(
+        server.mcp._mcp_server, "run", AsyncMock(return_value="ran_lowlevel")
+    ):
+        assert await server.mcp.run("arg1", "arg2") == "ran_lowlevel"
+    with patch.object(
+        server.mcp, "run_stdio_async", AsyncMock(return_value="ran_stdio")
+    ):
+        assert await server.mcp.run() == "ran_stdio"
+
+
+async def test_kalshi_fastmcp_tool_execution() -> None:
+    tool = await server.mcp.get_tool("get_environment")
+    assert tool is not None
+    assert tool.input_schema == tool.parameters
+
+    with patch.object(
+        server.ToolRegistry,
+        "get_handler",
+        side_effect=RuntimeError("handler explosion"),
+    ):
+        err_res = await tool.run({})
+        assert err_res.is_error is True
+        assert "handler explosion" in err_res.content[0].text
+
+
+async def test_run_streamable_http_with_allowed_hosts_and_origins() -> None:
+    app_custom = server.streamable_http_app(allowed_hosts=["custom.local"])
+    assert app_custom is not None
+
+    with patch("uvicorn.Server.serve", AsyncMock()):
+        await server.run_streamable_http(
+            allowed_hosts=["custom.local"], allowed_origins=["https://origin.com"]
+        )
+
+
+def test_main_streamable_http_allowed_host_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "mcp-server-kalshi",
+            "--transport",
+            "streamable-http",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "9000",
+            "--allowed-host",
+            "internal.service.local",
+        ],
+    )
+    run_streamable_mock = AsyncMock()
+    monkeypatch.setattr(server, "run_streamable_http", run_streamable_mock)
+    server.main()
+    run_streamable_mock.assert_called_once_with(
+        host="127.0.0.1",
+        port=9000,
+        stateless_http=False,
+        json_response=False,
+        allowed_hosts=[
+            "127.0.0.1",
+            "localhost",
+            "127.0.0.1:9000",
+            "localhost:9000",
+            "internal.service.local",
+        ],
+    )
+
+
+def test_main_streamable_http_allowed_hosts_and_origins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "mcp-server-kalshi",
+            "--transport",
+            "streamable-http",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "9000",
+            "--allowed-host",
+            "internal.service.local",
+            "--allowed-origin",
+            "https://app.example.com",
+        ],
+    )
+    run_streamable_mock = AsyncMock()
+    monkeypatch.setattr(server, "run_streamable_http", run_streamable_mock)
+    server.main()
+    run_streamable_mock.assert_called_once_with(
+        host="127.0.0.1",
+        port=9000,
+        stateless_http=False,
+        json_response=False,
+        allowed_hosts=[
+            "127.0.0.1",
+            "localhost",
+            "127.0.0.1:9000",
+            "localhost:9000",
+            "internal.service.local",
+        ],
+        allowed_origins=["https://app.example.com"],
+    )

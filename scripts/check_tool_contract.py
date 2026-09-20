@@ -262,7 +262,9 @@ def verify_tool_contracts() -> int:
             errors += 1
 
         # Verify inputSchema / input_schema
-        schema = getattr(tool, "input_schema", getattr(tool, "inputSchema", None))
+        schema = getattr(tool, "input_schema", None)
+        if schema is None:
+            schema = getattr(tool, "inputSchema", None)
         if not schema or schema.get("type") != "object" or "properties" not in schema:
             print(f"[!] Tool '{name}' has invalid inputSchema")
             errors += 1
@@ -274,25 +276,33 @@ def verify_tool_contracts() -> int:
             errors += 1
             continue
 
-        ro = getattr(ann, "read_only_hint", getattr(ann, "readOnlyHint", None))
+        ro = getattr(ann, "read_only_hint", None)
+        if ro is None:
+            ro = getattr(ann, "readOnlyHint", None)
         if ro != expected["readOnly"]:
             print(
                 f"[!] Tool '{name}' readOnlyHint mismatch: expected {expected['readOnly']}, got {ro}"
             )
             errors += 1
-        dest = getattr(ann, "destructive_hint", getattr(ann, "destructiveHint", None))
+        dest = getattr(ann, "destructive_hint", None)
+        if dest is None:
+            dest = getattr(ann, "destructiveHint", None)
         if dest != expected["destructive"]:
             print(
                 f"[!] Tool '{name}' destructiveHint mismatch: expected {expected['destructive']}, got {dest}"
             )
             errors += 1
-        idem = getattr(ann, "idempotent_hint", getattr(ann, "idempotentHint", None))
+        idem = getattr(ann, "idempotent_hint", None)
+        if idem is None:
+            idem = getattr(ann, "idempotentHint", None)
         if idem != expected["idempotent"]:
             print(
                 f"[!] Tool '{name}' idempotentHint mismatch: expected {expected['idempotent']}, got {idem}"
             )
             errors += 1
-        ow = getattr(ann, "open_world_hint", getattr(ann, "openWorldHint", None))
+        ow = getattr(ann, "open_world_hint", None)
+        if ow is None:
+            ow = getattr(ann, "openWorldHint", None)
         if ow != expected["openWorld"]:
             print(
                 f"[!] Tool '{name}' openWorldHint mismatch: expected {expected['openWorld']}, got {ow}"

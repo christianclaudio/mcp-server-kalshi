@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ==============================================================================
-# MCP Protocol Conformance Verification Script: Kalshi
+# MCP Protocol Conformance Verification Script
 # Conforms to MCP Spec 2026-07-28 / SEP-2577 and tests against
 # @modelcontextprotocol/conformance with expected baseline failures.
 # ==============================================================================
@@ -16,15 +16,21 @@ SERVER_PID=""
 
 cleanup() {
     if [[ -n "${SERVER_PID}" ]] && kill -0 "${SERVER_PID}" 2>/dev/null; then
-        echo "[*] Shutting down background Kalshi MCP server (PID ${SERVER_PID})..."
+        echo "[*] Shutting down background MCP server (PID ${SERVER_PID})..."
         kill -TERM "${SERVER_PID}" 2>/dev/null || true
         wait "${SERVER_PID}" 2>/dev/null || true
     fi
 }
 trap cleanup EXIT INT TERM
 
-echo "[*] Starting mcp-server-kalshi on ${HOST}:${PORT} (streamable-http)..."
-uv run python -m mcp_server_kalshi.server --transport streamable-http --host "${HOST}" --port "${PORT}" &
+if command -v uv >/dev/null 2>&1; then
+    RUN_CMD=(uv run python)
+else
+    RUN_CMD=(python)
+fi
+
+echo "[*] Starting mcp-server-kalshi server on ${HOST}:${PORT} (streamable-http)..."
+KALSHI_ENV="demo" "${RUN_CMD[@]}" -m mcp_server_kalshi.server --transport streamable-http --host "${HOST}" --port "${PORT}" &
 SERVER_PID=$!
 
 echo "[*] Waiting for server endpoint ${URL} to become ready..."
@@ -51,9 +57,11 @@ if [[ ${READY} -ne 1 ]]; then
     exit 1
 fi
 
+CONFORMANCE_VERSION="${CONFORMANCE_VERSION:-0.1.16}"
+
 echo "[✓] Server is ready. Running MCP conformance suite..."
-npx --yes @modelcontextprotocol/conformance server \
+npx --yes "@modelcontextprotocol/conformance@${CONFORMANCE_VERSION}" server \
     --url "${URL}" \
     --expected-failures "${BASELINE}"
 
-echo "[✓] Kalshi MCP protocol conformance suite passed cleanly."
+echo "[✓] MCP protocol conformance suite passed cleanly."

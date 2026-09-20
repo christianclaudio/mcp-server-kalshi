@@ -110,3 +110,7 @@ async def test_client_context_manager_and_aclose(rsa_key_file):
     # Calling aclose again when already None
     await client.aclose()
     assert client._client is None
+
+    # Test close alias
+    await client.close()
+    assert client._client is None

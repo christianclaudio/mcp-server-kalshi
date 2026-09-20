@@ -6,14 +6,18 @@ import os
 import signal
 import time
 import uuid
-from collections.abc import Callable, Coroutine
+from collections.abc import AsyncIterator, Callable, Coroutine, Sequence
+from contextlib import asynccontextmanager
 from functools import wraps
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, cast
 
-import mcp.server.stdio
+import mcp.server.stdio as mcp_server_stdio
 import mcp.types as types
-from mcp.server.lowlevel import NotificationOptions, Server
+from fastmcp import FastMCP
+from fastmcp.tools.base import Tool, ToolResult
+from fastmcp.tools.function_tool import FunctionTool
+from mcp.server.lowlevel import NotificationOptions
 from mcp.server.models import InitializationOptions
 
 from .config import get_settings
@@ -113,12 +117,114 @@ settings = get_settings()
 
 KALSHI_BACKGROUND_INFO = _background_info(settings.env_label, settings.is_production)
 
-server: Server = Server("kalshi-server")
 kalshi_client = KalshiAPIClient(
     base_url=settings.rest_base_url,
     api_key=settings.api_key_value(),
     private_key_path=settings.KALSHI_PRIVATE_KEY_PATH,
 )
+
+
+@asynccontextmanager
+async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
+    """Manage server lifecycle and persistent client resources."""
+    logging.getLogger(__name__).info("Starting up Kalshi MCP server")
+    try:
+        yield {"client": kalshi_client}
+    finally:
+        logging.getLogger(__name__).info("Shutting down Kalshi MCP resources")
+        if kalshi_client is not None:
+            await kalshi_client.aclose()
+
+
+def _is_read_only(ann: Any) -> bool:
+    if ann is None:
+        return False
+    val = getattr(ann, "read_only_hint", None)
+    if val is not None:
+        return bool(val)
+    return bool(getattr(ann, "readOnlyHint", False))
+
+
+class KalshiFastMCP(FastMCP):
+    _custom_version: str | None = None
+    server: Any = None
+
+    @property
+    def version(self) -> str | None:
+        return (
+            self._custom_version
+            if self._custom_version is not None
+            else super().version
+        )
+
+    @version.setter
+    def version(self, val: str) -> None:
+        self._custom_version = val
+
+    def get_capabilities(
+        self,
+        notification_options: NotificationOptions | None = None,
+        experimental_capabilities: dict[str, Any] | None = None,
+    ) -> types.ServerCapabilities:
+        return self._mcp_server.get_capabilities(
+            notification_options=notification_options or NotificationOptions(),
+            experimental_capabilities=experimental_capabilities or {},
+        )
+
+    async def list_tools(self, *args: Any, **kwargs: Any) -> Sequence[Tool]:
+        tools = await super().list_tools(*args, **kwargs)
+        if settings.KALSHI_READONLY:
+            return [t for t in tools if _is_read_only(t.annotations)]
+        return tools
+
+    def add_request_handler(self, *args: Any, **kwargs: Any) -> Any:
+        return self._mcp_server.add_request_handler(*args, **kwargs)
+
+    async def run(self, *args: Any, **kwargs: Any) -> Any:  # type: ignore[override]
+        if args and len(args) >= 2:
+            return await self._mcp_server.run(*args, **kwargs)
+        return await self.run_stdio_async(show_banner=False)
+
+    def streamable_http_app(
+        self,
+        path: str | None = None,
+        stateless_http: bool | None = None,
+        json_response: bool | None = None,
+        host: str = "127.0.0.1",
+        **kwargs: Any,
+    ) -> Any:
+        """Compatibility bridge for streamable HTTP ASGI application."""
+        allowed_hosts = kwargs.pop(
+            "allowed_hosts",
+            None,
+        )
+        if allowed_hosts is None:
+            allowed_hosts = [host, "localhost", f"{host}:8000", "localhost:8000"]
+        return self.http_app(
+            path=path,
+            transport="streamable-http",
+            stateless_http=stateless_http,
+            json_response=json_response,
+            host_origin_protection=True,
+            allowed_hosts=allowed_hosts,
+            **kwargs,
+        )
+
+
+mcp = KalshiFastMCP(
+    "kalshi-server",
+    version=__version__,
+    lifespan=server_lifespan,
+    instructions=KALSHI_BACKGROUND_INFO,
+    cache_ttl=3600,
+    cache_scope="private",
+)
+server = mcp
+mcp.server = mcp  # Self-reference for server.server backward compatibility
+streamable_http_app = mcp.streamable_http_app
+
+if not hasattr(FunctionTool, "input_schema"):  # pragma: no branch
+    FunctionTool.input_schema = property(lambda self: self.parameters)  # type: ignore[attr-defined]
 
 
 def _serialize(result: Any) -> str:
@@ -165,6 +271,49 @@ WrappedHandler = Callable[
 ]
 
 
+class KalshiFastMCPTool(Tool):
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        parameters: dict[str, Any],
+        annotations: Any,
+        handler: WrappedHandler,
+    ) -> None:
+        super().__init__(
+            name=name,
+            description=description,
+            parameters=parameters,
+            annotations=annotations,
+        )
+        object.__setattr__(self, "_handler", handler)
+
+    @property
+    def input_schema(self) -> dict[str, Any]:
+        return self.parameters
+
+    async def run(self, arguments: dict[str, Any]) -> ToolResult:
+        try:
+            handler = ToolRegistry.get_handler(self.name)
+            res = await handler(arguments)
+            text = res[0].text if res else ""
+            is_error = bool(res and res[0].text.startswith(f"Error in {self.name}:"))
+            return ToolResult(
+                content=[types.TextContent(type="text", text=text)],
+                is_error=is_error,
+            )
+        except Exception as exc:
+            sanitized = redact_secrets(str(exc))
+            return ToolResult(
+                content=[
+                    types.TextContent(
+                        type="text", text=f"Error in {self.name}: {sanitized}"
+                    )
+                ],
+                is_error=True,
+            )
+
+
 class ToolRegistry:
     _tools: dict[str, tuple[types.Tool, WrappedHandler]] = {}
 
@@ -187,20 +336,29 @@ class ToolRegistry:
                 result = await handler(request)
                 return [types.TextContent(type="text", text=_serialize(result))]
 
+            tool_annotations = _annotations(
+                read_only=read_only,
+                destructive=destructive,
+                idempotent=idempotent,
+                open_world=open_world,
+            )
             cls._tools[name] = (
                 types.Tool(
                     name=name,
                     description=description,
                     input_schema=input_schema.to_mcp_input_schema(),
-                    annotations=_annotations(
-                        read_only=read_only,
-                        destructive=destructive,
-                        idempotent=idempotent,
-                        open_world=open_world,
-                    ),
+                    annotations=tool_annotations,
                 ),
                 wrapped_handler,
             )
+            fastmcp_tool = KalshiFastMCPTool(
+                name=name,
+                description=description,
+                parameters=input_schema.to_mcp_input_schema(),
+                annotations=tool_annotations,
+                handler=wrapped_handler,
+            )
+            mcp.add_tool(fastmcp_tool)
             return wrapped_handler
 
         return decorator
@@ -211,13 +369,7 @@ class ToolRegistry:
             return [
                 tool
                 for tool, _ in cls._tools.values()
-                if tool.annotations is not None
-                and getattr(
-                    tool.annotations,
-                    "read_only_hint",
-                    getattr(tool.annotations, "readOnlyHint", False),
-                )
-                is True
+                if _is_read_only(tool.annotations)
             ]
         return [tool for tool, _ in cls._tools.values()]
 
@@ -226,20 +378,10 @@ class ToolRegistry:
         if name not in cls._tools:
             raise ValueError(f"Unknown tool: {name}")
         tool, handler = cls._tools[name]
-        if settings.KALSHI_READONLY:
-            is_ro = (
-                getattr(
-                    tool.annotations,
-                    "read_only_hint",
-                    getattr(tool.annotations, "readOnlyHint", False),
-                )
-                if tool.annotations is not None
-                else False
+        if settings.KALSHI_READONLY and not _is_read_only(tool.annotations):
+            raise ValueError(
+                f"Server is operating in read-only mode (KALSHI_READONLY=1); tool '{name}' is disabled."
             )
-            if not is_ro:
-                raise ValueError(
-                    f"Server is operating in read-only mode (KALSHI_READONLY=1); tool '{name}' is disabled."
-                )
         return handler
 
 
@@ -1018,25 +1160,28 @@ async def _req_call_tool(
     return types.CallToolResult(content=cast(Any, content), is_error=is_error)
 
 
-server.add_request_handler("tools/list", types.PaginatedRequestParams, _req_list_tools)
-server.add_request_handler("tools/call", types.CallToolRequestParams, _req_call_tool)
-
-
 async def run_stdio() -> None:
-    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="kalshi-server",
-                server_version=__version__,
-                instructions=KALSHI_BACKGROUND_INFO,
-                capabilities=server.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
-                ),
-            ),
-        )
+    from fastmcp.server.context import reset_transport, set_transport
+
+    token = set_transport("stdio")
+    try:
+        async with mcp._lifespan_manager():
+            async with mcp_server_stdio.stdio_server() as (read_stream, write_stream):
+                await server.run(
+                    read_stream,
+                    write_stream,
+                    InitializationOptions(
+                        server_name="kalshi-server",
+                        server_version=__version__,
+                        instructions=KALSHI_BACKGROUND_INFO,
+                        capabilities=server.get_capabilities(
+                            notification_options=NotificationOptions(),
+                            experimental_capabilities={},
+                        ),
+                    ),
+                )
+    finally:
+        reset_transport(token)
 
 
 async def run_streamable_http(
@@ -1044,16 +1189,23 @@ async def run_streamable_http(
     port: int = 8000,
     stateless_http: bool = False,
     json_response: bool = False,
+    allowed_hosts: list[str] | None = None,
+    allowed_origins: list[str] | None = None,
 ) -> None:
     import uvicorn
 
     server.version = __version__
     server.instructions = KALSHI_BACKGROUND_INFO
-    starlette_app = server.streamable_http_app(
-        host=host,
-        stateless_http=stateless_http,
-        json_response=json_response,
-    )
+    kwargs: dict[str, Any] = {
+        "host": host,
+        "stateless_http": stateless_http,
+        "json_response": json_response,
+    }
+    if allowed_hosts is not None:
+        kwargs["allowed_hosts"] = allowed_hosts
+    if allowed_origins is not None:
+        kwargs["allowed_origins"] = allowed_origins
+    starlette_app = server.streamable_http_app(**kwargs)
     config = uvicorn.Config(
         starlette_app,
         host=host,
@@ -1109,6 +1261,18 @@ def main() -> None:
         default=settings.KALSHI_MCP_JSON_RESPONSE,
         help="Return direct JSON responses instead of SSE text/event-stream over Streamable HTTP.",
     )
+    parser.add_argument(
+        "--allowed-host",
+        action="append",
+        default=[],
+        help="Allowed host header for DNS rebinding protection (can be repeated).",
+    )
+    parser.add_argument(
+        "--allowed-origin",
+        action="append",
+        default=[],
+        help="Allowed origin header for CORS/CSRF protection (can be repeated).",
+    )
     args, _ = parser.parse_known_args()
 
     if args.transport != "streamable-http":
@@ -1122,14 +1286,23 @@ def main() -> None:
             )
 
     if args.transport == "streamable-http":
-        asyncio.run(
-            run_streamable_http(
-                host=args.host,
-                port=args.port,
-                stateless_http=args.stateless,
-                json_response=args.json_response,
-            )
-        )
+        http_kwargs: dict[str, Any] = {
+            "host": args.host,
+            "port": args.port,
+            "stateless_http": args.stateless,
+            "json_response": args.json_response,
+        }
+        if args.allowed_host or args.allowed_origin:
+            hosts = [
+                args.host,
+                "localhost",
+                f"{args.host}:{args.port}",
+                f"localhost:{args.port}",
+            ] + args.allowed_host
+            http_kwargs["allowed_hosts"] = hosts
+            if args.allowed_origin:
+                http_kwargs["allowed_origins"] = args.allowed_origin
+        asyncio.run(run_streamable_http(**http_kwargs))
     else:
         asyncio.run(run())
 

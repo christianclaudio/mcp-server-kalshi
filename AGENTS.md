@@ -11,20 +11,20 @@ This is `mcp-server-kalshi` — an enterprise Model Context Protocol (MCP) serve
 **Lineage & Purpose**:
 - **Upstream Origin**: Maintained by christianclaudio as an enterprise-hardened fork of `9crusher/mcp-server-kalshi`.
 - **Primary Function**: Built for deep end-to-end trading workflows (market discovery → candidate research → legal settlement rules extraction → order simulation/placement).
-- **Core Stack**: Python 3.10+, `uv`, official `mcp` low-level `Server`, `httpx` (async connection pooling & retry engine), `pydantic` v2, and `cryptography` (RSA-PSS signing).
+- **Core Stack**: Python 3.10+, `uv`, `fastmcp>=4.0.5` + `mcp>=2.2.0` (FastMCP 4 engine, lifespan management, host & origin protection, Spec 2026-07-28), `httpx` (async connection pooling & retry engine), `pydantic` v2, and `cryptography` (RSA-PSS signing).
 
 ---
 
 ## 🏗️ Architecture Blueprint
 
-Data flows: request → Pydantic schema validation → API client → low-level MCP server:
+Data flows: request → Pydantic schema validation → API client → FastMCP 4 / low-level MCP server:
 
 ```
 mcp-server-kalshi/
 ├── src/mcp_server_kalshi/
 │   ├── __init__.py               # Package version (__version__) and public exports
 │   ├── config.py                 # Pydantic Settings (env/.env). Safety default: KALSHI_ENV=demo
-│   ├── server.py                 # ToolRegistry (@ToolRegistry.register_tool), MCP Server handlers, instructions
+│   ├── server.py                 # ToolRegistry, FastMCP 4 engine, lifespan, streamable HTTP bridge
 │   ├── kalshi_client/
 │   │   ├── __init__.py           # Client module exports
 │   │   ├── base.py               # BaseAPIClient (async httpx) + KalshiAuth (RSA-PSS signing) + KalshiAPIError
@@ -32,20 +32,25 @@ mcp-server-kalshi/
 │   │   ├── schemas.py            # Pydantic request models extending MCPSchemaBaseModel / _Paginated
 │   │   └── pdf.py                # fetch_pdf_text() — download and extract contract-terms PDF
 ├── scripts/
+│   ├── check_conformance.sh      # Official @modelcontextprotocol/conformance@0.1.16 test harness
 │   ├── check_tool_contract.py    # AST/reflection contract verifying 36 tools & MCP 2.0 annotations
-│   └── check_openapi_drift.py    # AST visitor checking client methods against upstream Kalshi OpenAPI spec
+│   ├── check_openapi_drift.py    # AST visitor checking client methods against upstream Kalshi OpenAPI spec
+│   └── determine_bump.py         # Automated SemVer bump calculation based on conventional commits
 ├── tests/
 │   ├── conftest.py               # Shared fixtures and mock HTTP transports (offline only)
 │   ├── test_auth.py              # RSA-PSS signing format and query string exclusion tests
 │   ├── test_client_endpoints.py  # Unit tests for API client methods
+│   ├── test_determine_bump.py    # Unit tests for SemVer bump calculation logic
 │   ├── test_orders.py            # Order translation, inversion, and confirm-gate tests
 │   ├── test_handlers.py          # Tool handler execution tests
-│   ├── test_protocol.py          # Wire-level stdio & stateless streamable HTTP protocol verification
-│   └── test_server_comprehensive.py # Comprehensive MCP server lifecycle and registry tests
+│   ├── test_protocol.py          # Wire-level stdio, stateless streamable HTTP, and in-memory client tests
+│   └── test_server_comprehensive.py # Comprehensive server lifespan, tool execution, and host protection tests
 ├── .github/workflows/
-│   ├── ci.yml                    # Multi-job matrix: lint, py3.10-3.13 tests, contracts, CodeQL, docker build
+│   ├── ci.yml                    # Multi-job matrix: lint, py3.10-3.13 tests, contracts, conformance, drift
 │   ├── release.yml               # Automated release on v* tags: PyPI wheel/sdist, CycloneDX SBOM, GHCR docker
 │   └── drift-monitor.yml         # Scheduled upstream schema & parameter drift check
+├── fastmcp.json                  # FastMCP 4 manifest (source, entrypoint, environment, deployment)
+├── conformance-baseline.yml      # Conformance test harness expected failure baseline
 ├── Dockerfile                    # Multi-stage container build running as non-root USER mcp
 ├── server.json                   # MCP Registry catalog metadata (runtimeHint: uvx, stdio transport)
 ├── pyproject.toml                # Packaging metadata, entrypoint CLI, dependency pinning
@@ -131,8 +136,14 @@ uv run python scripts/check_tool_contract.py
 # Upstream OpenAPI / route drift check
 uv run python scripts/check_openapi_drift.py
 
-# Protocol integration tests (stdio handshake & stateless streamable HTTP)
+# Protocol integration tests (stdio handshake, in-memory client, & streamable HTTP)
 uv run pytest tests/test_protocol.py
+
+# Protocol conformance verification (@modelcontextprotocol/conformance@0.1.16)
+./scripts/check_conformance.sh
+
+# Automated SemVer bump calculation
+uv run python scripts/determine_bump.py --json
 
 # Local pre-commit CodeRabbit CLI review
 coderabbit review --agent --uncommitted

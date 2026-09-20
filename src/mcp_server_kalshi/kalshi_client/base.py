@@ -163,6 +163,9 @@ class BaseAPIClient:
             await self._client.aclose()
             self._client = None
 
+    async def close(self) -> None:
+        await self.aclose()
+
     async def __aenter__(self) -> "BaseAPIClient":
         self._ensure_client()
         return self
