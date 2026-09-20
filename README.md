@@ -6,6 +6,23 @@ An enterprise MCP server providing AI agents with a first-class interface to [Ka
 
 ---
 
+## 🏗️ System Architecture
+
+```mermaid
+graph TD
+    Client["AI Agent (Claude / Cortex / Antigravity / Cursor)"] -->|"MCP Stdio / Streamable HTTP"| Server["mcp-server-kalshi"]
+    Server --> Config["KalshiSettings & Safety Gates"]
+    Config -->|"KALSHI_READONLY=1"| RO["Read-Only Gate (29 tools)"]
+    Config -->|"confirm=True"| Mutating["Order Execution Gate (7 tools)"]
+    Config -->|"Default: demo"| EnvSelect{"Environment Router"}
+    EnvSelect -->|"demo"| DemoAPI["Kalshi Demo API (demo-api.kalshi.co)"]
+    EnvSelect -->|"prod"| ProdAPI["Kalshi Live Exchange (api.elections.kalshi.com)"]
+    Server --> ClientPool["KalshiClient (httpx.AsyncClient + RSA SHA256 Signing)"]
+    ClientPool --> EnvSelect
+```
+
+---
+
 ## 🚀 Highlights (36 Tools)
 
 - **Discovery & Search** — `list_markets`, `get_market`, `list_events`, `get_event`, `list_series`, `get_series`, `get_tags_by_categories`, `get_sports_filters`.
@@ -60,6 +77,66 @@ An enterprise MCP server providing AI agents with a first-class interface to [Ka
 }
 ```
 
+### Google Antigravity & Gemini CLI (`~/.gemini/antigravity-cli/mcp_config.json`)
+```json
+{
+  "mcpServers": {
+    "kalshi": {
+      "command": "uvx",
+      "args": ["mcp-server-kalshi"],
+      "env": {
+        "KALSHI_ENV": "demo",
+        "KALSHI_API_KEY": "<YOUR_KALSHI_API_KEY>",
+        "KALSHI_PRIVATE_KEY_PATH": "/path/to/kalshi-rsa.pem"
+      },
+      "lazy": true
+    }
+  }
+}
+```
+
+### Snowflake Cortex (`~/.snowflake/cortex/mcp.json`)
+```json
+{
+  "mcpServers": {
+    "kalshi": {
+      "command": "uvx",
+      "args": ["mcp-server-kalshi"],
+      "env": {
+        "KALSHI_ENV": "demo",
+        "KALSHI_API_KEY": "<YOUR_KALSHI_API_KEY>",
+        "KALSHI_PRIVATE_KEY_PATH": "/path/to/kalshi-rsa.pem"
+      },
+      "lazy": true
+    }
+  }
+}
+```
+
+### Cursor & VS Code (Cline / Roo Code)
+Add to `.cursor/mcp.json` or `cline_mcp_settings.json`:
+```json
+{
+  "mcpServers": {
+    "kalshi": {
+      "command": "uvx",
+      "args": ["mcp-server-kalshi"],
+      "env": {
+        "KALSHI_ENV": "demo",
+        "KALSHI_API_KEY": "<YOUR_KALSHI_API_KEY>",
+        "KALSHI_PRIVATE_KEY_PATH": "/path/to/kalshi-rsa.pem"
+      }
+    }
+  }
+}
+```
+
+### Local HTTP / Streamable HTTP Transport
+Launch the FastMCP server over modern Streamable HTTP:
+```bash
+python -m mcp_server_kalshi.server --transport streamable-http --host 127.0.0.1 --port 8000
+```
+
 ### Docker
 ```json
 {
@@ -91,10 +168,10 @@ uv run mypy --strict
 uv run ruff check .
 uv run black --check src tests
 
-# 4. Tool contract & OpenAPI drift validation
+# 4. Tool contract, drift & protocol conformance validation
 uv run python scripts/check_tool_contract.py
 uv run python scripts/check_openapi_drift.py
-uv run python scripts/smoke_test.py
+./scripts/check_conformance.sh
 ```
 
 ---
