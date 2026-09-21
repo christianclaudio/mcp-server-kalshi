@@ -191,6 +191,7 @@ class KalshiFastMCP(FastMCP):
         stateless_http: bool | None = None,
         json_response: bool | None = None,
         host: str = "127.0.0.1",
+        port: int = 8000,
         **kwargs: Any,
     ) -> Any:
         """Compatibility bridge for streamable HTTP ASGI application."""
@@ -199,7 +200,7 @@ class KalshiFastMCP(FastMCP):
             None,
         )
         if allowed_hosts is None:
-            allowed_hosts = [host, "localhost", f"{host}:8000", "localhost:8000"]
+            allowed_hosts = [host, "localhost", f"{host}:{port}", f"localhost:{port}"]
         return self.http_app(
             path=path,
             transport="streamable-http",
@@ -1200,6 +1201,7 @@ async def run_streamable_http(
         allowed_hosts = [host, "localhost", f"{host}:{port}", f"localhost:{port}"]
     kwargs: dict[str, Any] = {
         "host": host,
+        "port": port,
         "stateless_http": stateless_http,
         "json_response": json_response,
         "allowed_hosts": allowed_hosts,
@@ -1287,6 +1289,12 @@ def main() -> None:
             )
 
     if args.transport == "streamable-http":
+        if args.host in ("0.0.0.0", "::") and not args.allowed_host:
+            parser.error("--allowed-host is required when binding to a wildcard host")
+        if any(h.strip() == "*" for h in args.allowed_host):
+            parser.error(
+                "Wildcard '*' is not permitted in --allowed-host; specify explicit hostnames."
+            )
         http_kwargs: dict[str, Any] = {
             "host": args.host,
             "port": args.port,

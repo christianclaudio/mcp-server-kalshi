@@ -487,6 +487,7 @@ async def test_run_streamable_http(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     mock_app_factory.assert_called_once_with(
         host="0.0.0.0",
+        port=9000,
         stateless_http=True,
         json_response=True,
         allowed_hosts=["0.0.0.0", "localhost", "0.0.0.0:9000", "localhost:9000"],
@@ -523,7 +524,7 @@ def test_main_streamable_http(monkeypatch: pytest.MonkeyPatch) -> None:
             "--transport",
             "streamable-http",
             "--host",
-            "0.0.0.0",
+            "127.0.0.1",
             "--port",
             "8080",
             "--stateless",
@@ -533,10 +534,26 @@ def test_main_streamable_http(monkeypatch: pytest.MonkeyPatch) -> None:
     run_streamable_mock.reset_mock()
     server.main()
     run_streamable_mock.assert_called_once_with(
-        host="0.0.0.0", port=8080, stateless_http=True, json_response=True
+        host="127.0.0.1", port=8080, stateless_http=True, json_response=True
     )
 
-    # 3. stdio with stateless flags triggers warnings
+    # 3. Wildcard bind on streamable-http without --allowed-host fails closed with parser.error
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "mcp-server-kalshi",
+            "--transport",
+            "streamable-http",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "8080",
+        ],
+    )
+    with pytest.raises(SystemExit):
+        server.main()
+
+    # 4. stdio with stateless flags triggers warnings
     monkeypatch.setattr(
         "sys.argv",
         ["mcp-server-kalshi", "--transport", "stdio", "--stateless", "--json-response"],
@@ -714,3 +731,20 @@ def test_main_streamable_http_allowed_hosts_and_origins(
         ],
         allowed_origins=["https://app.example.com"],
     )
+
+
+def test_main_streamable_http_wildcard_star_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "mcp-server-kalshi",
+            "--transport",
+            "streamable-http",
+            "--allowed-host",
+            "*",
+        ],
+    )
+    with pytest.raises(SystemExit):
+        server.main()
