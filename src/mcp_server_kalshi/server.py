@@ -2,8 +2,8 @@ import argparse
 import asyncio
 import json
 import logging
-import os
 import signal
+import sys
 import time
 import uuid
 from collections.abc import AsyncIterator, Callable, Coroutine, Sequence
@@ -218,7 +218,7 @@ mcp = KalshiFastMCP(
     lifespan=server_lifespan,
     instructions=KALSHI_BACKGROUND_INFO,
     cache_ttl=3600,
-    cache_scope="private",
+    cache_scope="public",
 )
 server = mcp
 mcp.server = mcp  # Self-reference for server.server backward compatibility
@@ -1224,7 +1224,7 @@ run = run_stdio
 
 def _handle_shutdown(signum: int, frame: Any) -> None:
     """Gracefully handle SIGTERM/SIGINT from host supervisor to exit with status 0 immediately."""
-    os._exit(0)
+    sys.exit(0)
 
 
 def main() -> None:
