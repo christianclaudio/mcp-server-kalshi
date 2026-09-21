@@ -731,3 +731,20 @@ def test_main_streamable_http_allowed_hosts_and_origins(
         ],
         allowed_origins=["https://app.example.com"],
     )
+
+
+def test_main_streamable_http_wildcard_star_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "mcp-server-kalshi",
+            "--transport",
+            "streamable-http",
+            "--allowed-host",
+            "*",
+        ],
+    )
+    with pytest.raises(SystemExit):
+        server.main()
