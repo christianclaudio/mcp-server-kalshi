@@ -50,8 +50,10 @@ jobs:
             dist/
             sbom.cdx.json
 
+  # fork-only: upstream owns PyPI/registry. This job must not publish.
   publish:
-    name: Publish to PyPI
+    name: Publish to PyPI and MCP Registry (disabled)
+    if: false
     needs: build
     runs-on: ubuntu-latest
     environment: pypi

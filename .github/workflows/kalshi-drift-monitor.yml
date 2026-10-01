@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --locked --all-extras
       - name: Run drift detection
         id: drift
         run: uv run python scripts/check_openapi_drift.py

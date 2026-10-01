@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.5] - 2026-10-01
+
+Proposed fork release. Not tagged. Flat tool names are unchanged.
+
+### Changed
+- Raised the FastMCP floor from `>=4.0.5` to `>=4.0.10`. The lockfile resolves FastMCP 4.0.10.
+- CI and the drift monitor install with `uv sync --locked --all-extras`.
+- Install docs point at git and `ghcr.io/christianclaudio/mcp-server-kalshi`. Removed the README link to `COOKBOOK.md` (that file is not in this repo).
+
+### Fixed
+- Merged the upstream error-handling and OpenAPI drift commits from `9crusher/mcp-server-kalshi` (their #14), including the `ClientCall.path` alias.
+
+### Removed
+- Public PyPI and MCP Registry publish from this fork. `release.yml` keeps build, twine check, CycloneDX SBOM, and GHCR image publish. The PyPI and `mcp-publisher` job is gated with `if: false`. Removed `.github/workflows/deploy.yml`.
+
 ## [0.2.4] - 2026-08-28
 
 ### Added

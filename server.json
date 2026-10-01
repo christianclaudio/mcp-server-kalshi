@@ -1,19 +1,19 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.9crusher/mcp-server-kalshi",
-  "description": "MCP server for end-to-end trading on Kalshi prediction markets: discover, research, trade.",
+  "name": "io.github.christianclaudio/mcp-server-kalshi",
+  "description": "Kalshi MCP fork. Install via git or GHCR; not published to PyPI or the registry.",
   "repository": {
-    "url": "https://github.com/9crusher/mcp-server-kalshi",
+    "url": "https://github.com/christianclaudio/mcp-server-kalshi",
     "source": "github"
   },
-  "version": "0.2.4",
+  "version": "0.2.5",
   "packages": [
     {
-      "registryType": "pypi",
-      "registryBaseUrl": "https://pypi.org",
-      "identifier": "mcp-server-kalshi",
-      "version": "0.2.4",
-      "runtimeHint": "uvx",
+      "registryType": "oci",
+      "registryBaseUrl": "https://ghcr.io",
+      "identifier": "ghcr.io/christianclaudio/mcp-server-kalshi",
+      "version": "0.2.5",
+      "runtimeHint": "docker",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {
