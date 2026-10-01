@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.check_openapi_drift import (
+    ClientCall,
     check_drift,
     is_parameter_deprecated,
     load_allowlist,
@@ -176,3 +177,59 @@ paths:
 
     code = check_drift(local_spec=mock_spec_file)
     assert code == 0
+
+
+def test_client_call_path_property():
+    call = ClientCall(
+        method="GET",
+        raw_path="/markets/{ticker}",
+        normalized_path="/markets/{}",
+    )
+    assert call.path == "/markets/{ticker}"
+    assert call.raw_path == "/markets/{ticker}"
+
+
+def test_check_drift_deprecation_detection(tmp_path):
+    mock_spec_file = tmp_path / "mock_spec.yaml"
+    mock_spec_file.write_text("""
+paths:
+  /exchange/status:
+    get:
+      deprecated: true
+      parameters: []
+  /portfolio/orders:
+    get:
+      parameters:
+        - name: status
+          in: query
+          deprecated: true
+""")
+    code = check_drift(local_spec=mock_spec_file)
+    assert code == 1
+
+
+def test_parameter_deprecation_error_formatting(tmp_path):
+    mock_client = tmp_path / "mock_client.py"
+    mock_client.write_text("""
+class MockClient:
+    async def get_test(self):
+        await self.get("/markets", params={"deprecated_arg": "val"})
+""")
+    mock_spec = tmp_path / "mock_spec.yaml"
+    mock_spec.write_text("""
+paths:
+  /markets:
+    get:
+      parameters:
+        - name: deprecated_arg
+          in: query
+          deprecated: true
+""")
+    mock_allow = tmp_path / "allowlist.txt"
+    mock_allow.write_text("")
+    code = check_drift(
+        local_spec=mock_spec,
+        client_path=mock_client,
+        allowlist_path=mock_allow,
+    )
+    assert code == 1
