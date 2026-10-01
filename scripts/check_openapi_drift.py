@@ -36,6 +36,11 @@ class ClientCall:
     body_keys: set[str] = field(default_factory=set)
     line_number: int = 0
 
+    @property
+    def path(self) -> str:
+        """Alias for raw_path."""
+        return self.raw_path
+
 
 @dataclass
 class SpecEndpoint:

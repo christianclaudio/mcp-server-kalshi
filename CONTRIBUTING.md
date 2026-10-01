@@ -15,7 +15,7 @@ git clone https://github.com/christianclaudio/mcp-server-kalshi.git
 cd mcp-server-kalshi
 
 # 2. Sync virtual environment and dev dependencies
-uv sync --all-extras
+uv sync --locked --all-extras
 ```
 
 ---

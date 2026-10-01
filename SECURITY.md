@@ -40,7 +40,7 @@ This MCP server executes trades and manages financial balances on the Kalshi exc
 ### 3. Read-Only Mode (`KALSHI_READONLY=1`)
 When connecting this server to autonomous agents, research workflows, or shared chat assistants, run with:
 ```bash
-KALSHI_READONLY=1 uvx mcp-server-kalshi
+KALSHI_READONLY=1 uvx --from git+https://github.com/christianclaudio/mcp-server-kalshi mcp-server-kalshi
 ```
 This strictly limits the server to **29 read-only discovery, research, and portfolio inspection tools**, removing all order creation, cancellation, and amendment endpoints from the agent context.
 

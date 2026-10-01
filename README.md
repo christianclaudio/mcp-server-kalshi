@@ -1,8 +1,8 @@
 # MCP Server Kalshi
 
-<!-- mcp-name: io.github.9crusher/mcp-server-kalshi -->
-
 An enterprise MCP server providing AI agents with a first-class interface to [Kalshi](https://kalshi.com) prediction markets. It is built for end-to-end trading: browse markets, research them, read the *exact* settlement rules (including pulling the contract-terms PDFs), manage risk groups, and execute single & batch trades — all through type-safe MCP tools.
+
+This repository is Christian Claudio's fork of [`9crusher/mcp-server-kalshi`](https://github.com/9crusher/mcp-server-kalshi). Install it from this git repository or from `ghcr.io/christianclaudio/mcp-server-kalshi`. Public PyPI and the MCP Registry listing stay with upstream.
 
 ---
 
@@ -66,7 +66,7 @@ graph TD
   "mcpServers": {
     "kalshi": {
       "command": "uvx",
-      "args": ["mcp-server-kalshi"],
+      "args": ["--from", "git+https://github.com/christianclaudio/mcp-server-kalshi", "mcp-server-kalshi"],
       "env": {
         "KALSHI_ENV": "demo",
         "KALSHI_API_KEY": "<YOUR_KALSHI_API_KEY>",
@@ -83,7 +83,7 @@ graph TD
   "mcpServers": {
     "kalshi": {
       "command": "uvx",
-      "args": ["mcp-server-kalshi"],
+      "args": ["--from", "git+https://github.com/christianclaudio/mcp-server-kalshi", "mcp-server-kalshi"],
       "env": {
         "KALSHI_ENV": "demo",
         "KALSHI_API_KEY": "<YOUR_KALSHI_API_KEY>",
@@ -101,7 +101,7 @@ graph TD
   "mcpServers": {
     "kalshi": {
       "command": "uvx",
-      "args": ["mcp-server-kalshi"],
+      "args": ["--from", "git+https://github.com/christianclaudio/mcp-server-kalshi", "mcp-server-kalshi"],
       "env": {
         "KALSHI_ENV": "demo",
         "KALSHI_API_KEY": "<YOUR_KALSHI_API_KEY>",
@@ -120,7 +120,7 @@ Add to `.cursor/mcp.json` or `cline_mcp_settings.json`:
   "mcpServers": {
     "kalshi": {
       "command": "uvx",
-      "args": ["mcp-server-kalshi"],
+      "args": ["--from", "git+https://github.com/christianclaudio/mcp-server-kalshi", "mcp-server-kalshi"],
       "env": {
         "KALSHI_ENV": "demo",
         "KALSHI_API_KEY": "<YOUR_KALSHI_API_KEY>",
@@ -158,7 +158,7 @@ python -m mcp_server_kalshi.server --transport streamable-http --host 127.0.0.1 
 
 ```bash
 # 1. Install dependencies
-uv sync --all-extras
+uv sync --locked --all-extras
 
 # 2. Run unit & offline tests (100% coverage enforced)
 uv run pytest --cov=src/mcp_server_kalshi --cov-fail-under=100
@@ -178,7 +178,6 @@ uv run python scripts/check_openapi_drift.py
 
 ## 📚 Documentation & Guides
 
-- 📖 [Runbooks & Operational Recipes](COOKBOOK.md)
 - 🛡️ [Security Policy & Guidelines](SECURITY.md)
 - 🤝 [Contributing Guidelines](CONTRIBUTING.md)
 - 🧪 [Testing & Verification Invariants](TESTING.md)

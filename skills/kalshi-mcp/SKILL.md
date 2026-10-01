@@ -1,12 +1,12 @@
 ---
 name: kalshi
 description: Enterprise Agent Skill for researching, discovery, rules extraction, and executing trades on Kalshi prediction markets via mcp-server-kalshi.
-version: 0.2.4
+version: 0.2.5
 ---
 
 # Kalshi Prediction Markets Agent Skill
 
-This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-server-kalshi`.
+This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-server-kalshi`. Install this fork from git (`git+https://github.com/christianclaudio/mcp-server-kalshi`) or `ghcr.io/christianclaudio/mcp-server-kalshi`. It is not published to public PyPI or the MCP Registry.
 
 ---
 
@@ -18,7 +18,7 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
   "mcpServers": {
     "kalshi": {
       "command": "uvx",
-      "args": ["mcp-server-kalshi"],
+      "args": ["--from", "git+https://github.com/christianclaudio/mcp-server-kalshi", "mcp-server-kalshi"],
       "env": {
         "KALSHI_ENV": "demo",
         "KALSHI_API_KEY": "${KALSHI_API_KEY}",
@@ -35,7 +35,7 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
   "mcpServers": {
     "kalshi": {
       "command": "uvx",
-      "args": ["mcp-server-kalshi"],
+      "args": ["--from", "git+https://github.com/christianclaudio/mcp-server-kalshi", "mcp-server-kalshi"],
       "env": {
         "KALSHI_ENV": "demo",
         "KALSHI_API_KEY": "${KALSHI_API_KEY}",
@@ -53,7 +53,7 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
     "kalshi": {
       "transport": "stdio",
       "command": "uvx",
-      "args": ["mcp-server-kalshi"],
+      "args": ["--from", "git+https://github.com/christianclaudio/mcp-server-kalshi", "mcp-server-kalshi"],
       "env": {
         "KALSHI_ENV": "demo",
         "KALSHI_API_KEY": "${KALSHI_API_KEY}",

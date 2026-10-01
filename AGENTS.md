@@ -11,7 +11,8 @@ This is `mcp-server-kalshi` — an enterprise Model Context Protocol (MCP) serve
 **Lineage & Purpose**:
 - **Upstream Origin**: Maintained by christianclaudio as an enterprise-hardened fork of `9crusher/mcp-server-kalshi`.
 - **Primary Function**: Built for deep end-to-end trading workflows (market discovery → candidate research → legal settlement rules extraction → order simulation/placement).
-- **Core Stack**: Python 3.10+, `uv`, `fastmcp>=4.0.5` + `mcp>=2.2.0` (FastMCP 4 engine, lifespan management, host & origin protection, Spec 2026-07-28), `httpx` (async connection pooling & retry engine), `pydantic` v2, and `cryptography` (RSA-PSS signing).
+- **Core Stack**: Python 3.10+, `uv`, `fastmcp>=4.0.10` + `mcp>=2.2.0` (FastMCP 4 engine, lifespan management, host & origin protection, Spec 2026-07-28), `httpx` (async connection pooling & retry engine), `pydantic` v2, and `cryptography` (RSA-PSS signing).
+- **Distribution**: Install from git or `ghcr.io/christianclaudio/mcp-server-kalshi`. This fork does not publish to public PyPI or the MCP Registry. Upstream owns the public package name `mcp-server-kalshi` and registry id `io.github.9crusher/mcp-server-kalshi`.
 
 ---
 
@@ -46,13 +47,14 @@ mcp-server-kalshi/
 │   ├── test_protocol.py          # Wire-level stdio, stateless streamable HTTP, and in-memory client tests
 │   └── test_server_comprehensive.py # Comprehensive server lifespan, tool execution, and host protection tests
 ├── .github/workflows/
-│   ├── ci.yml                    # Multi-job matrix: lint, py3.10-3.13 tests, contracts, conformance, drift
-│   ├── release.yml               # Automated release on v* tags: PyPI wheel/sdist, CycloneDX SBOM, GHCR docker
-│   └── drift-monitor.yml         # Scheduled upstream schema & parameter drift check
+│   ├── ci.yml                    # Lint, types, py3.10-3.13 tests, contract, drift, conformance (`uv sync --locked`)
+│   ├── release.yml               # v* tag: build, twine check, CycloneDX SBOM, GHCR; PyPI/registry gated off
+│   ├── kalshi-drift-monitor.yml  # Scheduled upstream schema and parameter drift check
+│   └── dependabot-automerge.yml  # Auto-merge non-major Dependabot updates
 ├── fastmcp.json                  # FastMCP 4 manifest (source, entrypoint, environment, deployment)
 ├── conformance-baseline.yml      # Conformance test harness expected failure baseline
 ├── Dockerfile                    # Multi-stage container build running as non-root USER mcp
-├── server.json                   # MCP Registry catalog metadata (runtimeHint: uvx, stdio transport)
+├── server.json                   # Fork catalog metadata (GHCR/git install; not published to the registry)
 ├── pyproject.toml                # Packaging metadata, entrypoint CLI, dependency pinning
 ├── AGENTS.md                     # Agent guidance map, gotchas, and conventions (this file)
 └── README.md                     # User-facing installation, quickstart, and tool index
@@ -118,8 +120,8 @@ When translating an API endpoint or Kalshi documentation into an MCP tool, follo
 ## 🛠️ Development & Verification Commands
 
 ```bash
-# Install editable with dev dependencies
-uv sync --extra dev
+# Install editable with dev dependencies (matches the locked CI resolve)
+uv sync --locked --extra dev
 
 # Lint and formatting
 uv run ruff check . && uv run ruff format --check .
@@ -153,12 +155,13 @@ coderabbit review --agent --uncommitted
 
 ## 🔄 CI/CD Matrix & Operational Release SOP
 
-The GitHub Actions CI matrix enforces:
-- Ruff lint & format checks.
+The GitHub Actions CI matrix (`.github/workflows/ci.yml`) enforces:
+- Ruff lint, Ruff format, and Black format checks.
 - Mypy type checks.
 - Python 3.10, 3.11, 3.12, 3.13 test matrix with 100% coverage.
-- Tool contract & OpenAPI drift validation.
-- Multi-stage Docker image build.
-- CodeQL security scan.
+- Tool contract and OpenAPI drift validation.
+- MCP protocol conformance.
 
-For release automation and packaging, push matching `v*` tags aligned with `pyproject.toml`'s `project.version` to trigger `.github/workflows/release.yml`.
+Installs use `uv sync --locked --all-extras`. Scheduled drift checks live in `kalshi-drift-monitor.yml`.
+
+A `v*` tag that matches `pyproject.toml` `project.version` runs `.github/workflows/release.yml`: build the wheel, `twine check`, write a CycloneDX SBOM, and publish a Docker image to `ghcr.io/christianclaudio/mcp-server-kalshi`. The PyPI and MCP Registry job in that workflow is disabled (`if: false`). There is no `deploy.yml`. Do not publish this fork to public PyPI or the MCP Registry.
