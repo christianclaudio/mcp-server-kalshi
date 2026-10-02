@@ -3,6 +3,8 @@
 All requests go through an injected httpx.MockTransport (see conftest.make_client) — no network.
 """
 
+import socket
+
 import httpx
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -13,6 +15,7 @@ from mcp_server_kalshi.kalshi_client.base import (
     load_private_key_from_file,
 )
 from mcp_server_kalshi.kalshi_client.client import KalshiAPIClient
+from mcp_server_kalshi.ssrf import UnsafeURLError
 
 
 async def test_verbs_map_to_http_methods(make_client):
@@ -71,6 +74,31 @@ async def test_error_response_falls_back_to_text_body(make_client):
     with pytest.raises(KalshiAPIError) as exc_info:
         await client.get("/x")
     assert exc_info.value.body == "upstream boom"
+
+
+def test_client_normalizes_allowlisted_base_url():
+    client = KalshiAPIClient(base_url="https://api.elections.kalshi.com/trade-api/v2/")
+    assert client._base_url == "https://api.elections.kalshi.com/trade-api/v2"
+
+
+def test_client_rejects_base_urls_outside_the_allowlist():
+    with pytest.raises(UnsafeURLError, match="blocked"):
+        KalshiAPIClient(base_url="https://127.0.0.1/trade-api/v2")
+    with pytest.raises(UnsafeURLError, match="https is required"):
+        KalshiAPIClient(base_url="http://demo-api.kalshi.co/trade-api/v2")
+    with pytest.raises(UnsafeURLError, match="not allowlisted"):
+        KalshiAPIClient(base_url="https://evil.example/trade-api/v2")
+
+
+async def test_request_blocked_when_api_host_resolves_private(make_client, monkeypatch):
+    def _private(host, port, *args, **kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 0))]
+
+    monkeypatch.setattr("mcp_server_kalshi.ssrf.socket.getaddrinfo", _private)
+    client, requests = make_client(lambda req: httpx.Response(200, json={"ok": True}))
+    with pytest.raises(UnsafeURLError, match="resolves to a blocked"):
+        await client.get("/exchange/status")
+    assert requests == []
 
 
 async def test_authenticated_method_requires_credentials():

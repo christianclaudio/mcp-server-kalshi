@@ -6,13 +6,13 @@
     "url": "https://github.com/christianclaudio/mcp-server-kalshi",
     "source": "github"
   },
-  "version": "0.2.6",
+  "version": "0.2.7",
   "packages": [
     {
       "registryType": "oci",
       "registryBaseUrl": "https://ghcr.io",
       "identifier": "ghcr.io/christianclaudio/mcp-server-kalshi",
-      "version": "0.2.6",
+      "version": "0.2.7",
       "runtimeHint": "docker",
       "transport": { "type": "stdio" },
       "environmentVariables": [
@@ -35,7 +35,7 @@
         },
         {
           "name": "BASE_URL",
-          "description": "Optional explicit REST base override (must include /trade-api/v2)",
+          "description": "Optional https override; only the demo or prod Kalshi API host plus /trade-api/v2",
           "isRequired": false
         },
         {

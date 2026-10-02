@@ -4,6 +4,9 @@ Settings are constructed with ``_env_file=None`` so the developer's real ``.env`
 into assertions.
 """
 
+import pytest
+from pydantic import ValidationError
+
 from mcp_server_kalshi.config import Settings, get_settings
 
 
@@ -21,8 +24,25 @@ def test_rest_base_url_derived_from_env():
 
 
 def test_base_url_override_wins_and_is_stripped():
-    s = _settings(BASE_URL="https://proxy.internal/trade-api/v2/")
-    assert s.rest_base_url == "https://proxy.internal/trade-api/v2"
+    s = _settings(BASE_URL="https://demo-api.kalshi.co/trade-api/v2/")
+    assert s.BASE_URL == "https://demo-api.kalshi.co/trade-api/v2"
+    assert s.rest_base_url == "https://demo-api.kalshi.co/trade-api/v2"
+
+
+def test_blank_base_url_falls_back_to_env():
+    s = _settings(BASE_URL="   ", KALSHI_ENV="prod")
+    assert s.BASE_URL is None
+    assert s.is_production is True
+    assert s.rest_base_url == "https://api.elections.kalshi.com/trade-api/v2"
+
+
+def test_base_url_rejects_unexpected_private_and_non_https():
+    with pytest.raises(ValidationError, match="not allowlisted"):
+        _settings(BASE_URL="https://proxy.internal/trade-api/v2/")
+    with pytest.raises(ValidationError, match="blocked"):
+        _settings(BASE_URL="https://169.254.169.254/trade-api/v2")
+    with pytest.raises(ValidationError, match="https is required"):
+        _settings(BASE_URL="http://demo-api.kalshi.co/trade-api/v2")
 
 
 def test_is_production_from_env():

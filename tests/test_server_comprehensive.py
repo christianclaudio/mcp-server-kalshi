@@ -22,7 +22,9 @@ async def test_all_24_handlers_execute_successfully(
         get_series={
             "series": {
                 "series_ticker": "S-1",
-                "contract_url": "https://example.com/cert.pdf",
+                "contract_url": (
+                    "https://assets.kalshi.com/regulatory/product-certifications/cert.pdf"
+                ),
             }
         },
         get_market_orderbook={"orderbook": {}},
@@ -94,7 +96,7 @@ async def test_all_24_handlers_execute_successfully(
     ):
         out = handler_result(
             await server.handle_fetch_rules_pdf(
-                {"url": "https://example.com/rules.pdf"}
+                {"url": "https://assets.kalshi.com/contract_terms/rules.pdf"}
             )
         )
         assert out["text"] == "rules"

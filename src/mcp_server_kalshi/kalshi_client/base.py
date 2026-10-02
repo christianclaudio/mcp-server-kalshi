@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from ..errors import KalshiAPIError, redact_secrets
+from ..ssrf import avalidate_api_base_url, validate_api_base_url
 
 
 def load_private_key_from_file(file_path: str) -> rsa.RSAPrivateKey:
@@ -70,8 +71,9 @@ class BaseAPIClient:
     """A minimal async HTTP client for the Kalshi Trade API.
 
     ``base_url`` must be the fully-qualified API base including the version prefix, e.g.
-    ``https://demo-api.kalshi.co/trade-api/v2``. Endpoint paths passed to the request
-    helpers are relative to that (e.g. ``/portfolio/balance``).
+    ``https://demo-api.kalshi.co/trade-api/v2``. Only the demo and production Kalshi API
+    hosts are accepted. Endpoint paths passed to the request helpers are relative to that
+    (e.g. ``/portfolio/balance``).
 
     Authentication is optional: when both ``api_key`` and ``private_key_path`` are
     provided every request is RSA-PSS signed; otherwise requests are sent unsigned, which
@@ -86,7 +88,7 @@ class BaseAPIClient:
         private_key_path: str | None = None,
         timeout: int = 30,
     ) -> None:
-        self._base_url: str = base_url.rstrip("/")
+        self._base_url: str = validate_api_base_url(base_url)
         self._timeout: int = timeout
         self._api_key: str | None = api_key
         self._private_key: rsa.RSAPrivateKey | None = (
@@ -128,6 +130,10 @@ class BaseAPIClient:
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
     ) -> Any:
+        # Re-check the base (it is operator-configurable) and reject a DNS answer
+        # that points at a private, link-local, or metadata address. The lookup
+        # is awaited so it does not block the event loop.
+        self._base_url = await avalidate_api_base_url(self._base_url)
         client = self._ensure_client()
         url = self._base_url + path
         response = await client.request(method, url, params=params, json=json)

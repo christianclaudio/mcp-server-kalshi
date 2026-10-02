@@ -8,6 +8,7 @@ import pytest
 from conftest import FakeClient, handler_result
 
 from mcp_server_kalshi import server
+from mcp_server_kalshi.ssrf import UnsafeURLError
 
 EXPECTED_TOOLS = {
     # discovery
@@ -153,3 +154,37 @@ async def test_fetch_rules_pdf_errors_when_series_lacks_url(monkeypatch):
     handler = server.ToolRegistry.get_handler("fetch_rules_pdf")
     with pytest.raises(ValueError, match="no contract_terms_url"):
         await handler({"ticker": "KXELONMARS-99"})
+
+
+async def test_fetch_rules_pdf_errors_when_series_url_is_blank(monkeypatch):
+    fake = FakeClient(get_series={"series": {"contract_terms_url": ""}})
+    monkeypatch.setattr(server, "kalshi_client", fake)
+
+    handler = server.ToolRegistry.get_handler("fetch_rules_pdf")
+    with pytest.raises(ValueError, match="no contract_terms_url"):
+        await handler({"ticker": "KXELONMARS-99"})
+
+
+async def test_fetch_rules_pdf_rejects_series_url_outside_allowlist(monkeypatch):
+    fake = FakeClient(
+        get_series={"series": {"contract_terms_url": "https://example.com/rules.pdf"}}
+    )
+    monkeypatch.setattr(server, "kalshi_client", fake)
+    with pytest.raises(UnsafeURLError, match="not allowlisted"):
+        await server.handle_fetch_rules_pdf({"series_ticker": "S-1"})
+
+
+async def test_fetch_rules_pdf_rejects_direct_metadata_and_weird_schemes():
+    metadata = await server.handle_call_tool(
+        "fetch_rules_pdf",
+        {"url": "http://169.254.169.254/latest/meta-data/"},
+    )
+    assert metadata[0].text.startswith("Error in fetch_rules_pdf:")
+    assert "blocked" in metadata[0].text
+
+    weird = await server.handle_call_tool(
+        "fetch_rules_pdf",
+        {"url": "file:///etc/passwd"},
+    )
+    assert weird[0].text.startswith("Error in fetch_rules_pdf:")
+    assert "scheme" in weird[0].text
