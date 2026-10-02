@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.6] - 2026-10-02
+
+Proposed fork release. Not tagged. Proxus → Christian must approve this SemVer before any tag. Do not retag v0.2.5.
+
+### Changed
+- `cancel_order`, `decrease_order`, `batch_cancel_orders`, and `cancel_order_group` return a preview unless `confirm=true`, matching `create_order` and `amend_order`.
+- CI adds a **Build and package check** job (`python -m build`, `twine check`).
+
+### Fixed
+- Contributor docs no longer cite the missing `scripts/smoke_test.py`. Packaged smoke tests use `scripts/smoke_test_uvx.py` against a local wheel or a git install. This fork is not published to public PyPI.
+
 ## [0.2.5] - 2026-10-01
 
 Proposed fork release. Not tagged. Flat tool names are unchanged.

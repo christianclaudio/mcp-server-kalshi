@@ -47,10 +47,12 @@ Guards against broken or altered API paths by comparing `client.py` against offi
 uv run python scripts/check_openapi_drift.py
 ```
 
-### 3. Stdio Smoke Test
-Performs a live JSON-RPC `initialize`, `tools/list`, and `tools/call get_environment` handshake:
+### 3. Packaged stdio smoke test
+This fork is not on public PyPI. `scripts/smoke_test_uvx.py` launches a packaged server, completes the JSON-RPC `initialize` handshake, and checks `tools/list`. Build a local wheel, then point `uvx` at that wheel (or install from git):
 ```bash
-uv run python scripts/smoke_test.py
+uv run python -m build
+uv run python scripts/smoke_test_uvx.py -- uvx --from dist/mcp_server_kalshi-*.whl mcp-server-kalshi
+# or: uvx --from git+https://github.com/christianclaudio/mcp-server-kalshi mcp-server-kalshi
 ```
 
 ### 4. Code Formatting & Static Analysis

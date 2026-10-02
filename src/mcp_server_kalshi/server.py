@@ -106,10 +106,11 @@ Workflow for deep trading:
 1. Discover with list_markets / list_events / list_series (there is no free-text search).
 2. Research with get_market, get_market_orderbook, get_market_candlesticks, get_market_trades.
 3. Understand settlement with get_market_rules, and read the actual contract with fetch_rules_pdf.
-4. Trade with create_order (requires confirm=true) / cancel_order / amend_order.
+4. Trade with create_order, amend_order, decrease_order, cancel_order,
+   batch_create_orders, batch_cancel_orders, and cancel_order_group. Each requires confirm=true.
 
 Call get_environment to re-confirm the active environment at any time. Order tools return a
-preview and place nothing unless called with confirm=true.
+preview and place or cancel nothing unless called with confirm=true.
 """
 
 
@@ -853,7 +854,10 @@ async def handle_create_order(request: dict[str, Any]) -> Any:
 
 @ToolRegistry.register_tool(
     name="cancel_order",
-    description="Cancel a resting order by id (authenticated). Reduces your exposure.",
+    description=(
+        "Cancel a resting order by id (authenticated). SAFETY: returns a preview and cancels "
+        "NOTHING unless confirm=true."
+    ),
     input_schema=CancelOrderRequest,
     read_only=False,
     destructive=True,
@@ -862,6 +866,17 @@ async def handle_create_order(request: dict[str, Any]) -> Any:
 )
 async def handle_cancel_order(request: dict[str, Any]) -> Any:
     req = CancelOrderRequest(**request)
+    if not req.confirm:
+        return {
+            "preview": True,
+            "message": (
+                f"[{settings.env_label}] Cancel order {req.order_id}. "
+                "Re-run with confirm=true to cancel."
+            ),
+            "environment": settings.env_label,
+            "order_id": req.order_id,
+            "confirm_required": True,
+        }
     return await kalshi_client.cancel_order(req.order_id)
 
 
@@ -904,7 +919,10 @@ async def handle_amend_order(request: dict[str, Any]) -> Any:
 
 @ToolRegistry.register_tool(
     name="decrease_order",
-    description="Decrease a resting order's remaining count. Provide exactly one of reduce_by or reduce_to. Reduces exposure.",
+    description=(
+        "Decrease a resting order's remaining count. Provide exactly one of reduce_by or "
+        "reduce_to. SAFETY: returns a preview and applies NOTHING unless confirm=true."
+    ),
     input_schema=DecreaseOrderRequest,
     read_only=False,
     destructive=True,
@@ -914,6 +932,18 @@ async def handle_amend_order(request: dict[str, Any]) -> Any:
 async def handle_decrease_order(request: dict[str, Any]) -> Any:
     req = DecreaseOrderRequest(**request)
     payload = build_decrease_order_payload(req.reduce_by, req.reduce_to)
+    if not req.confirm:
+        return {
+            "preview": True,
+            "message": (
+                f"[{settings.env_label}] Decrease order {req.order_id}. "
+                "Re-run with confirm=true to apply."
+            ),
+            "environment": settings.env_label,
+            "order_id": req.order_id,
+            "kalshi_v2_payload": payload,
+            "confirm_required": True,
+        }
     return await kalshi_client.decrease_order(req.order_id, payload)
 
 
@@ -975,7 +1005,10 @@ async def handle_batch_create_orders(request: dict[str, Any]) -> Any:
 
 @ToolRegistry.register_tool(
     name="batch_cancel_orders",
-    description="Cancel up to 20 resting orders in a single atomic request (V2). Reduces portfolio exposure.",
+    description=(
+        "Cancel up to 20 resting orders in a single atomic request (V2). SAFETY: returns a "
+        "preview and cancels NOTHING unless confirm=true."
+    ),
     input_schema=BatchCancelOrdersRequest,
     read_only=False,
     destructive=True,
@@ -984,6 +1017,18 @@ async def handle_batch_create_orders(request: dict[str, Any]) -> Any:
 )
 async def handle_batch_cancel_orders(request: dict[str, Any]) -> Any:
     req = BatchCancelOrdersRequest(**request)
+    if not req.confirm:
+        return {
+            "preview": True,
+            "message": (
+                f"[{settings.env_label}] Cancel {len(req.order_ids)} order(s). "
+                "Re-run with confirm=true to cancel."
+            ),
+            "environment": settings.env_label,
+            "order_ids": req.order_ids,
+            "count": len(req.order_ids),
+            "confirm_required": True,
+        }
     result = await kalshi_client.batch_cancel_orders(req.order_ids)
     return {
         "canceled": True,
@@ -1118,7 +1163,10 @@ async def handle_list_order_groups(request: dict[str, Any]) -> Any:
 
 @ToolRegistry.register_tool(
     name="cancel_order_group",
-    description="Cancel and dissolve an active order group (authenticated).",
+    description=(
+        "Cancel and dissolve an active order group (authenticated). SAFETY: returns a preview "
+        "and cancels NOTHING unless confirm=true."
+    ),
     input_schema=CancelOrderGroupRequest,
     read_only=False,
     destructive=True,
@@ -1127,6 +1175,17 @@ async def handle_list_order_groups(request: dict[str, Any]) -> Any:
 )
 async def handle_cancel_order_group(request: dict[str, Any]) -> Any:
     req = CancelOrderGroupRequest(**request)
+    if not req.confirm:
+        return {
+            "preview": True,
+            "message": (
+                f"[{settings.env_label}] Cancel order group {req.order_group_id}. "
+                "Re-run with confirm=true to cancel."
+            ),
+            "environment": settings.env_label,
+            "order_group_id": req.order_group_id,
+            "confirm_required": True,
+        }
     result = await kalshi_client.cancel_order_group(req.order_group_id)
     return {"canceled": True, "environment": settings.env_label, "result": result}
 

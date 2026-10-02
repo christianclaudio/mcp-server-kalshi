@@ -52,6 +52,7 @@ uv run python scripts/check_tool_contract.py
 # Verify parity against live Kalshi OpenAPI documentation
 uv run python scripts/check_openapi_drift.py
 
-# Stdio JSON-RPC initialize handshake smoke test
-uv run python scripts/smoke_test.py
+# Packaged stdio smoke test (local wheel or git; this fork is not on public PyPI)
+uv run python -m build
+uv run python scripts/smoke_test_uvx.py -- uvx --from dist/mcp_server_kalshi-*.whl mcp-server-kalshi
 ```
