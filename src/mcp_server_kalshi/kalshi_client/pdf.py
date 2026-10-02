@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 import httpx
 from pypdf import PdfReader
 
-from ..ssrf import UnsafeURLError, validate_pdf_url
+from ..ssrf import UnsafeURLError, avalidate_pdf_url
 
 # Redirect hops after the initial response. Each hop is allowlisted again.
 MAX_PDF_REDIRECTS = 3
@@ -15,7 +15,7 @@ MAX_PDF_REDIRECTS = 3
 
 async def _download_pdf(url: str) -> tuple[str, bytes]:
     """GET a PDF without env proxies, re-checking every redirect target."""
-    current = validate_pdf_url(url)
+    current = await avalidate_pdf_url(url)
     async with httpx.AsyncClient(
         timeout=30,
         follow_redirects=False,
@@ -32,7 +32,7 @@ async def _download_pdf(url: str) -> tuple[str, bytes]:
             location = raw_location.strip() if isinstance(raw_location, str) else ""
             if not location:
                 raise UnsafeURLError("Redirect is missing a Location header")
-            current = validate_pdf_url(urljoin(current, location))
+            current = await avalidate_pdf_url(urljoin(current, location))
     raise UnsafeURLError("redirect loop")  # pragma: no cover
 
 

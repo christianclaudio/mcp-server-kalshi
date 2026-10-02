@@ -66,7 +66,7 @@ from .kalshi_client.schemas import (
     ListSeriesRequest,
     MCPSchemaBaseModel,
 )
-from .ssrf import validate_pdf_url
+from .ssrf import avalidate_pdf_url
 
 try:
     __version__ = version("mcp-server-kalshi")
@@ -651,7 +651,7 @@ async def handle_fetch_rules_pdf(request: dict[str, Any]) -> Any:
                 f"contract_url={series.get('contract_url')}"
             )
         url = candidate
-    return await fetch_pdf_text(validate_pdf_url(url))
+    return await fetch_pdf_text(await avalidate_pdf_url(url))
 
 
 # =============================== Environment ================================

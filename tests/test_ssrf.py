@@ -1,6 +1,8 @@
 """SSRF policy: Kalshi host allowlists and blocked private ranges. No network."""
 
+import asyncio
 import socket
+import time
 from urllib.parse import urlsplit
 
 import pytest
@@ -10,6 +12,8 @@ from mcp_server_kalshi.ssrf import (
     KALSHI_API_HOSTS,
     KALSHI_PDF_HOSTS,
     UnsafeURLError,
+    avalidate_api_base_url,
+    avalidate_pdf_url,
     validate_api_base_url,
     validate_pdf_url,
 )
@@ -66,7 +70,7 @@ def _dns(*addrs: str):
 )
 def test_rejects_private_link_local_and_metadata(url: str) -> None:
     with pytest.raises(UnsafeURLError, match="blocked"):
-        validate_pdf_url(url, resolve=False)
+        validate_pdf_url(url)
 
 
 @pytest.mark.parametrize(
@@ -82,7 +86,7 @@ def test_rejects_private_link_local_and_metadata(url: str) -> None:
 )
 def test_rejects_weird_schemes_and_missing_host(url: str) -> None:
     with pytest.raises(UnsafeURLError, match="scheme|host"):
-        validate_pdf_url(url, resolve=False)
+        validate_pdf_url(url)
 
 
 def test_rejects_non_string_and_empty() -> None:
@@ -104,12 +108,12 @@ def test_rejects_non_string_and_empty() -> None:
 )
 def test_rejects_disallowed_characters(url: str) -> None:
     with pytest.raises(UnsafeURLError, match="disallowed characters"):
-        validate_pdf_url(url, resolve=False)
+        validate_pdf_url(url)
 
 
 def test_rejects_dot_only_host() -> None:
     with pytest.raises(UnsafeURLError, match="must include a host"):
-        validate_pdf_url("https://.../a.pdf", resolve=False)
+        validate_pdf_url("https://.../a.pdf")
 
 
 def test_public_ip_literals_are_not_allowlisted() -> None:
@@ -119,59 +123,57 @@ def test_public_ip_literals_are_not_allowlisted() -> None:
         "https://[::ffff:8.8.8.8]/a.pdf",
     ):
         with pytest.raises(UnsafeURLError, match="not allowlisted") as exc:
-            validate_pdf_url(url, resolve=False)
+            validate_pdf_url(url)
         assert "blocked" not in str(exc.value)
 
 
 def test_rejects_userinfo_port_and_lookalike_hosts() -> None:
     with pytest.raises(UnsafeURLError, match="userinfo"):
-        validate_pdf_url("https://user:pass@assets.kalshi.com/a.pdf", resolve=False)
+        validate_pdf_url("https://user:pass@assets.kalshi.com/a.pdf")
     with pytest.raises(UnsafeURLError, match="userinfo"):
-        validate_pdf_url("https://:pass@assets.kalshi.com/a.pdf", resolve=False)
+        validate_pdf_url("https://:pass@assets.kalshi.com/a.pdf")
     with pytest.raises(UnsafeURLError, match="port"):
-        validate_pdf_url("https://assets.kalshi.com:8443/a.pdf", resolve=False)
+        validate_pdf_url("https://assets.kalshi.com:8443/a.pdf")
     with pytest.raises(UnsafeURLError, match="port"):
-        validate_pdf_url("http://assets.kalshi.com:8080/a.pdf", resolve=False)
+        validate_pdf_url("http://assets.kalshi.com:8080/a.pdf")
     with pytest.raises(UnsafeURLError, match="port"):
-        validate_pdf_url("https://assets.kalshi.com:0/a.pdf", resolve=False)
+        validate_pdf_url("https://assets.kalshi.com:0/a.pdf")
     with pytest.raises(UnsafeURLError, match="not a valid"):
-        validate_pdf_url("https://assets.kalshi.com:99999/a.pdf", resolve=False)
+        validate_pdf_url("https://assets.kalshi.com:99999/a.pdf")
     with pytest.raises(UnsafeURLError, match="not a valid"):
-        validate_pdf_url("https://assets.kalshi.com:abc/a.pdf", resolve=False)
+        validate_pdf_url("https://assets.kalshi.com:abc/a.pdf")
     with pytest.raises(UnsafeURLError, match="not allowlisted"):
-        validate_pdf_url("https://assets.kalshi.com.evil.example/a.pdf", resolve=False)
+        validate_pdf_url("https://assets.kalshi.com.evil.example/a.pdf")
     with pytest.raises(UnsafeURLError, match="not allowlisted"):
-        validate_pdf_url("https://evil.assets.kalshi.com/a.pdf", resolve=False)
+        validate_pdf_url("https://evil.assets.kalshi.com/a.pdf")
     with pytest.raises(UnsafeURLError, match="not allowlisted"):
-        validate_pdf_url("https://evil.s3.amazonaws.com/a.pdf", resolve=False)
+        validate_pdf_url("https://evil.s3.amazonaws.com/a.pdf")
 
 
 @pytest.mark.parametrize("host", sorted(KALSHI_PDF_HOSTS))
 def test_allows_every_pdf_host(host: str) -> None:
     url = f"https://{host}/contract_terms/x.pdf"
-    assert validate_pdf_url(url, resolve=False) == url
+    assert validate_pdf_url(url) == url
 
 
 def test_pdf_url_normalization() -> None:
     assert (
-        validate_pdf_url(
-            "https://ASSETS.KALSHI.COM:443/contract_terms/NBA.pdf", resolve=False
-        )
+        validate_pdf_url("https://ASSETS.KALSHI.COM:443/contract_terms/NBA.pdf")
         == "https://assets.kalshi.com/contract_terms/NBA.pdf"
     )
     assert (
-        validate_pdf_url("https://assets.kalshi.com./a.pdf", resolve=False)
+        validate_pdf_url("https://assets.kalshi.com./a.pdf")
         == "https://assets.kalshi.com/a.pdf"
     )
     assert (
-        validate_pdf_url("http://assets.kalshi.com:80/a.pdf", resolve=False)
+        validate_pdf_url("http://assets.kalshi.com:80/a.pdf")
         == "http://assets.kalshi.com/a.pdf"
     )
-    assert validate_pdf_url("https://assets.kalshi.com", resolve=False) == (
+    assert validate_pdf_url("https://assets.kalshi.com") == (
         "https://assets.kalshi.com/"
     )
     assert (
-        validate_pdf_url("https://assets.kalshi.com/a.pdf?token=1", resolve=False)
+        validate_pdf_url("https://assets.kalshi.com/a.pdf?token=1")
         == "https://assets.kalshi.com/a.pdf?token=1"
     )
 
@@ -230,7 +232,7 @@ def test_rejects_bad_api_bases(url: str, match: str) -> None:
         validate_api_base_url(url)
 
 
-def test_does_not_resolve_hosts_that_fail_policy(monkeypatch) -> None:
+async def test_does_not_resolve_hosts_that_fail_policy(monkeypatch) -> None:
     calls: list[str] = []
 
     def _boom(host, port, *args, **kwargs):
@@ -239,74 +241,98 @@ def test_does_not_resolve_hosts_that_fail_policy(monkeypatch) -> None:
 
     monkeypatch.setattr("mcp_server_kalshi.ssrf.socket.getaddrinfo", _boom)
     with pytest.raises(UnsafeURLError):
-        validate_pdf_url("https://evil.example/a.pdf", resolve=True)
+        await avalidate_pdf_url("https://evil.example/a.pdf")
     with pytest.raises(UnsafeURLError):
-        validate_pdf_url("http://127.0.0.1/", resolve=True)
+        await avalidate_pdf_url("http://127.0.0.1/")
     assert (
-        validate_pdf_url("https://assets.kalshi.com/a.pdf", resolve=False)
+        validate_pdf_url("https://assets.kalshi.com/a.pdf")
         == "https://assets.kalshi.com/a.pdf"
     )
     assert calls == []
 
 
-def test_rejects_allowlisted_host_that_resolves_private(monkeypatch) -> None:
+async def test_rejects_allowlisted_host_that_resolves_private(monkeypatch) -> None:
     monkeypatch.setattr(
         "mcp_server_kalshi.ssrf.socket.getaddrinfo",
         _dns("8.8.8.8", "10.1.2.3"),
     )
     with pytest.raises(UnsafeURLError, match="resolves to a blocked"):
-        validate_pdf_url("https://assets.kalshi.com/a.pdf")
+        await avalidate_pdf_url("https://assets.kalshi.com/a.pdf")
 
 
-def test_allows_allowlisted_host_with_public_v4_and_v6(monkeypatch) -> None:
+async def test_allows_allowlisted_host_with_public_v4_and_v6(monkeypatch) -> None:
     monkeypatch.setattr(
         "mcp_server_kalshi.ssrf.socket.getaddrinfo",
         _dns("108.138.64.101", "2600:9000:2508:2800:1b:b291:7f00:93a1"),
     )
     assert (
-        validate_pdf_url("https://assets.kalshi.com/a.pdf")
+        await avalidate_pdf_url("https://assets.kalshi.com/a.pdf")
         == "https://assets.kalshi.com/a.pdf"
     )
 
 
-def test_rejects_link_local_zone_and_mapped_dns_answers(monkeypatch) -> None:
+async def test_rejects_link_local_zone_and_mapped_dns_answers(monkeypatch) -> None:
     monkeypatch.setattr(
         "mcp_server_kalshi.ssrf.socket.getaddrinfo",
         _dns("fe80::1%eth0"),
     )
     with pytest.raises(UnsafeURLError, match="resolves to a blocked"):
-        validate_pdf_url("https://assets.kalshi.com/a.pdf")
+        await avalidate_pdf_url("https://assets.kalshi.com/a.pdf")
 
     monkeypatch.setattr(
         "mcp_server_kalshi.ssrf.socket.getaddrinfo",
         _dns("::ffff:10.0.0.1"),
     )
     with pytest.raises(UnsafeURLError, match="resolves to a blocked"):
-        validate_pdf_url("https://assets.kalshi.com/a.pdf")
+        await avalidate_pdf_url("https://assets.kalshi.com/a.pdf")
 
 
-def test_rejects_dns_failures(monkeypatch) -> None:
+async def test_rejects_dns_failures(monkeypatch) -> None:
     def _gaierror(host, port, *args, **kwargs):
         raise socket.gaierror("no such host")
 
     monkeypatch.setattr("mcp_server_kalshi.ssrf.socket.getaddrinfo", _gaierror)
     with pytest.raises(UnsafeURLError, match="could not be resolved"):
-        validate_api_base_url("https://demo-api.kalshi.co/trade-api/v2", resolve=True)
+        await avalidate_api_base_url("https://demo-api.kalshi.co/trade-api/v2")
 
     monkeypatch.setattr("mcp_server_kalshi.ssrf.socket.getaddrinfo", _dns())
     with pytest.raises(UnsafeURLError, match="could not be resolved"):
-        validate_pdf_url("https://assets.kalshi.com/a.pdf")
+        await avalidate_pdf_url("https://assets.kalshi.com/a.pdf")
 
     monkeypatch.setattr(
         "mcp_server_kalshi.ssrf.socket.getaddrinfo",
         _dns("not-an-ip"),
     )
     with pytest.raises(UnsafeURLError, match="could not be resolved"):
-        validate_pdf_url("https://assets.kalshi.com/a.pdf")
+        await avalidate_pdf_url("https://assets.kalshi.com/a.pdf")
 
     def _numeric(host, port, *args, **kwargs):
         return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (0, 0))]
 
     monkeypatch.setattr("mcp_server_kalshi.ssrf.socket.getaddrinfo", _numeric)
     with pytest.raises(UnsafeURLError, match="could not be resolved"):
-        validate_pdf_url("https://assets.kalshi.com/a.pdf")
+        await avalidate_pdf_url("https://assets.kalshi.com/a.pdf")
+
+
+async def test_dns_lookup_yields_to_the_event_loop(monkeypatch) -> None:
+    """A slow resolver must not stall other tasks already scheduled on the loop."""
+    order: list[str] = []
+
+    def _slow(host, port, *args, **kwargs):
+        time.sleep(0.05)
+        order.append("dns")
+        return _dns("8.8.8.8")(host, port, *args, **kwargs)
+
+    monkeypatch.setattr("mcp_server_kalshi.ssrf.socket.getaddrinfo", _slow)
+
+    async def _tick() -> None:
+        await asyncio.sleep(0)
+        order.append("tick")
+
+    tick = asyncio.create_task(_tick())
+    assert (
+        await avalidate_pdf_url("https://assets.kalshi.com/a.pdf")
+        == "https://assets.kalshi.com/a.pdf"
+    )
+    await tick
+    assert order.index("tick") < order.index("dns")

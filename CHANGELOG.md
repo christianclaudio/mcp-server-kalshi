@@ -14,6 +14,7 @@ Proposed fork release. Not tagged.
 ### Security
 - `BASE_URL` is accepted only as `https` on `demo-api.kalshi.co` or `api.elections.kalshi.com`, with path `/trade-api/v2`. Private, loopback, link-local, metadata, and other hosts are rejected.
 - `fetch_rules_pdf` / `fetch_pdf_text` GET only allowlisted Kalshi document hosts (`assets.kalshi.com`, the public-docs buckets, and the demo staging docs bucket). Redirects are checked again. Non-HTTP schemes and blocked addresses are rejected before the request.
+- DNS checks on API requests and rules-PDF fetches, including redirect hops, use the event-loop resolver so they do not block other tasks. Allowlists and fail-closed behavior are unchanged.
 
 ## [0.2.6] - 2026-10-02
 

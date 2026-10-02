@@ -76,14 +76,14 @@ class Settings(BaseSettings):
         if not stripped:
             return None
         # Structural check only. Request time resolves the host and rejects private answers.
-        return validate_api_base_url(stripped, resolve=False)
+        return validate_api_base_url(stripped)
 
     @property
     def rest_base_url(self) -> str:
         """Resolved REST base URL (explicit override wins, else derived from env)."""
         if self.BASE_URL:
             return self.BASE_URL
-        return validate_api_base_url(ENV_REST_BASE[self.KALSHI_ENV], resolve=False)
+        return validate_api_base_url(ENV_REST_BASE[self.KALSHI_ENV])
 
     @property
     def ws_base_url(self) -> str:

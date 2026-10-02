@@ -7,6 +7,7 @@ the allowlist are not resolved.
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import re
 import socket
@@ -129,10 +130,16 @@ def _port_allowed(scheme: str, port: int | None) -> bool:
     return port == 80
 
 
-def _assert_public_dns(host: str) -> None:
-    """Reject allowlisted hosts that resolve to a blocked address."""
+async def _assert_public_dns(host: str) -> None:
+    """Reject allowlisted hosts that resolve to a blocked address.
+
+    The lookup uses the running loop's ``getaddrinfo``, which runs in the default
+    executor, so API and PDF hops do not block the event loop. Fail-closed: any
+    lookup error or blocked answer rejects the URL.
+    """
+    loop = asyncio.get_running_loop()
     try:
-        infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        infos = await loop.getaddrinfo(host, None, type=socket.SOCK_STREAM)
     except socket.gaierror as exc:
         raise UnsafeURLError(f"URL host {host!r} could not be resolved") from exc
     if not infos:
@@ -152,18 +159,15 @@ def _assert_public_dns(host: str) -> None:
             )
 
 
-def validate_outbound_url(
+def _parse_outbound_url(
     url: str,
     *,
     allowed_hosts: Collection[str],
     https_only: bool,
-    resolve: bool,
-) -> str:
-    """Return a canonical URL or raise ``UnsafeURLError``.
+) -> tuple[str, str]:
+    """Return ``(canonical_url, host)`` or raise ``UnsafeURLError``.
 
-    When ``resolve`` is true, allowlisted hostnames are looked up and rejected if
-    any address is in a blocked range. IP literals and unexpected hosts are judged
-    without a DNS lookup.
+    IP literals and unexpected hosts are judged here without a DNS lookup.
     """
     if not isinstance(url, str):
         raise UnsafeURLError("URL must be a non-empty string")
@@ -201,20 +205,16 @@ def validate_outbound_url(
         raise UnsafeURLError(_BLOCKED_ADDRESS)
     if host not in allowed_hosts:
         raise UnsafeURLError(f"URL host {host!r} is not allowlisted")
-    if resolve:
-        _assert_public_dns(host)
 
     path = parsed.path or "/"
-    return urlunsplit((scheme, host, path, parsed.query, ""))
+    return urlunsplit((scheme, host, path, parsed.query, "")), host
 
 
-def validate_api_base_url(url: str, *, resolve: bool = False) -> str:
-    """Validate a Kalshi REST base (https, allowlisted host, ``/trade-api/v2``)."""
-    normalized = validate_outbound_url(
+def _parse_api_base(url: str) -> tuple[str, str]:
+    normalized, host = _parse_outbound_url(
         url,
         allowed_hosts=KALSHI_API_HOSTS,
         https_only=True,
-        resolve=resolve,
     )
     parts = urlsplit(normalized)
     path = parts.path.rstrip("/")
@@ -222,14 +222,45 @@ def validate_api_base_url(url: str, *, resolve: bool = False) -> str:
         raise UnsafeURLError(_API_BASE)
     if path != "/trade-api/v2":
         raise UnsafeURLError(_API_BASE)
-    return normalized.rstrip("/")
+    return normalized.rstrip("/"), host
 
 
-def validate_pdf_url(url: str, *, resolve: bool = True) -> str:
-    """Validate a rules-PDF URL (http or https, allowlisted Kalshi document host)."""
-    return validate_outbound_url(
+def validate_api_base_url(url: str) -> str:
+    """Validate a Kalshi REST base without DNS (https, allowlisted host, ``/trade-api/v2``)."""
+    normalized, _ = _parse_api_base(url)
+    return normalized
+
+
+async def avalidate_api_base_url(url: str) -> str:
+    """Validate a Kalshi REST base and reject a blocked DNS answer.
+
+    Use this on the request path. The lookup does not block the event loop.
+    """
+    normalized, host = _parse_api_base(url)
+    await _assert_public_dns(host)
+    return normalized
+
+
+def validate_pdf_url(url: str) -> str:
+    """Validate a rules-PDF URL without DNS (http or https, allowlisted document host)."""
+    normalized, _ = _parse_outbound_url(
         url,
         allowed_hosts=KALSHI_PDF_HOSTS,
         https_only=False,
-        resolve=resolve,
     )
+    return normalized
+
+
+async def avalidate_pdf_url(url: str) -> str:
+    """Validate a rules-PDF URL and reject a blocked DNS answer.
+
+    Use this before each PDF GET, including redirect hops. The lookup does not
+    block the event loop.
+    """
+    normalized, host = _parse_outbound_url(
+        url,
+        allowed_hosts=KALSHI_PDF_HOSTS,
+        https_only=False,
+    )
+    await _assert_public_dns(host)
+    return normalized
