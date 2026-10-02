@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 
 
 class MCPSchemaBaseModel(BaseModel):
@@ -264,7 +264,7 @@ class CreateOrderRequest(MCPSchemaBaseModel):
     client_order_id: str | None = Field(
         default=None, description="Optional idempotency id; auto-generated if omitted."
     )
-    confirm: bool = Field(
+    confirm: StrictBool = Field(
         default=False,
         description="Must be true to actually place the order. False returns a preview only.",
     )
@@ -272,7 +272,7 @@ class CreateOrderRequest(MCPSchemaBaseModel):
 
 class CancelOrderRequest(MCPSchemaBaseModel):
     order_id: str = Field(..., description="The order id to cancel.")
-    confirm: bool = Field(
+    confirm: StrictBool = Field(
         default=False,
         description="Must be true to cancel the order. False returns a preview only.",
     )
@@ -292,7 +292,7 @@ class AmendOrderRequest(MCPSchemaBaseModel):
     updated_client_order_id: str | None = Field(
         default=None, description="Optional new client order id."
     )
-    confirm: bool = Field(
+    confirm: StrictBool = Field(
         default=False,
         description="Must be true to apply. False returns a preview only.",
     )
@@ -306,7 +306,7 @@ class DecreaseOrderRequest(MCPSchemaBaseModel):
     reduce_to: float | None = Field(
         default=None, description="Target remaining contracts."
     )
-    confirm: bool = Field(
+    confirm: StrictBool = Field(
         default=False,
         description="Must be true to decrease the order. False returns a preview only.",
     )
@@ -348,7 +348,7 @@ class BatchCreateOrdersRequest(MCPSchemaBaseModel):
     orders: list[BatchOrderItem] = Field(
         ..., min_length=1, max_length=20, description="List of orders to submit."
     )
-    confirm: bool = Field(
+    confirm: StrictBool = Field(
         default=False,
         description="Must be true to place the batch. False returns a simulation preview.",
     )
@@ -360,7 +360,7 @@ class BatchCancelOrdersRequest(MCPSchemaBaseModel):
     order_ids: list[str] = Field(
         ..., min_length=1, max_length=20, description="List of order IDs to cancel."
     )
-    confirm: bool = Field(
+    confirm: StrictBool = Field(
         default=False,
         description="Must be true to cancel the batch. False returns a preview only.",
     )
@@ -438,7 +438,7 @@ class CancelOrderGroupRequest(MCPSchemaBaseModel):
     """Cancel / delete an order group."""
 
     order_group_id: str = Field(..., description="The order group ID to cancel.")
-    confirm: bool = Field(
+    confirm: StrictBool = Field(
         default=False,
         description="Must be true to cancel the order group. False returns a preview only.",
     )
