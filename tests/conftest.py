@@ -12,6 +12,7 @@ Two building blocks used across the new tests:
 """
 
 import json
+import socket
 
 import httpx
 import pytest
@@ -21,6 +22,26 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from mcp_server_kalshi.kalshi_client.client import KalshiAPIClient
 
 BASE_URL = "https://demo-api.kalshi.co/trade-api/v2"
+
+
+@pytest.fixture(autouse=True)
+def _public_dns_for_ssrf_checks(monkeypatch, request):
+    """Keep SSRF DNS checks offline for unit tests.
+
+    Allowlisted hosts resolve to a public address so request-time checks do not
+    touch the network. Live ``e2e`` tests opt out. Tests that reject private DNS
+    answers patch ``getaddrinfo`` themselves.
+    """
+    if request.node.get_closest_marker("e2e"):
+        return
+
+    def _public_getaddrinfo(host, port, *args, **kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 0))]
+
+    monkeypatch.setattr(
+        "mcp_server_kalshi.ssrf.socket.getaddrinfo",
+        _public_getaddrinfo,
+    )
 
 
 def json_response(payload, status_code: int = 200) -> httpx.Response:

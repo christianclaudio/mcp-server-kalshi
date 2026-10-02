@@ -25,6 +25,7 @@ mcp-server-kalshi/
 ├── src/mcp_server_kalshi/
 │   ├── __init__.py               # Package version (__version__) and public exports
 │   ├── config.py                 # Pydantic Settings (env/.env). Safety default: KALSHI_ENV=demo
+│   ├── ssrf.py                   # Allowlist + private-range checks for API base and PDF URLs
 │   ├── server.py                 # ToolRegistry, FastMCP 4 engine, lifespan, streamable HTTP bridge
 │   ├── kalshi_client/
 │   │   ├── __init__.py           # Client module exports

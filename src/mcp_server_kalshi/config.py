@@ -1,8 +1,10 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AliasChoices, Field, SecretStr
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from .ssrf import validate_api_base_url
 
 # Kalshi Trade API base URLs. See https://docs.kalshi.com/getting_started/api_environments
 ENV_REST_BASE = {
@@ -29,9 +31,15 @@ class Settings(BaseSettings):
         description="Which Kalshi environment to target. 'demo' (sandbox, default) or 'prod' (real money).",
     )
     # Optional explicit override of the REST base URL. When unset it is derived from KALSHI_ENV.
+    # Only the demo and production Kalshi API hosts are accepted (see ssrf.KALSHI_API_HOSTS).
     BASE_URL: str | None = Field(
         default=None,
-        description="Explicit REST base URL override (including /trade-api/v2). Derived from KALSHI_ENV when unset.",
+        description=(
+            "Explicit REST base URL override. Only "
+            "https://demo-api.kalshi.co/trade-api/v2 or "
+            "https://api.elections.kalshi.com/trade-api/v2. "
+            "Derived from KALSHI_ENV when unset."
+        ),
     )
     KALSHI_API_KEY: SecretStr | None = Field(
         default=None,
@@ -59,12 +67,23 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
+    @field_validator("BASE_URL")
+    @classmethod
+    def _check_base_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            return None
+        # Structural check only. Request time resolves the host and rejects private answers.
+        return validate_api_base_url(stripped, resolve=False)
+
     @property
     def rest_base_url(self) -> str:
         """Resolved REST base URL (explicit override wins, else derived from env)."""
         if self.BASE_URL:
-            return self.BASE_URL.rstrip("/")
-        return ENV_REST_BASE[self.KALSHI_ENV]
+            return self.BASE_URL
+        return validate_api_base_url(ENV_REST_BASE[self.KALSHI_ENV], resolve=False)
 
     @property
     def ws_base_url(self) -> str:

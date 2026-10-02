@@ -66,6 +66,7 @@ from .kalshi_client.schemas import (
     ListSeriesRequest,
     MCPSchemaBaseModel,
 )
+from .ssrf import validate_pdf_url
 
 try:
     __version__ = version("mcp-server-kalshi")
@@ -642,14 +643,15 @@ async def handle_fetch_rules_pdf(request: dict[str, Any]) -> Any:
         field = (
             "contract_terms_url" if req.document == "contract_terms" else "contract_url"
         )
-        url = series.get(field)
-        if not url:
+        candidate = series.get(field)
+        if not isinstance(candidate, str) or not candidate:
             raise ValueError(
                 f"Series {series_ticker} has no {field}. Available: "
                 f"contract_terms_url={series.get('contract_terms_url')}, "
                 f"contract_url={series.get('contract_url')}"
             )
-    return await fetch_pdf_text(url)
+        url = candidate
+    return await fetch_pdf_text(validate_pdf_url(url))
 
 
 # =============================== Environment ================================

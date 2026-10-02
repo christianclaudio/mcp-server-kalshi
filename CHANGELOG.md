@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.7] - 2026-10-02
+
+Proposed fork release. Not tagged.
+
+### Security
+- `BASE_URL` is accepted only as `https` on `demo-api.kalshi.co` or `api.elections.kalshi.com`, with path `/trade-api/v2`. Private, loopback, link-local, metadata, and other hosts are rejected.
+- `fetch_rules_pdf` / `fetch_pdf_text` GET only allowlisted Kalshi document hosts (`assets.kalshi.com`, the public-docs buckets, and the demo staging docs bucket). Redirects are checked again. Non-HTTP schemes and blocked addresses are rejected before the request.
+
 ## [0.2.6] - 2026-10-02
 
 Proposed fork release. Not tagged. Proxus → Christian must approve this SemVer before any tag. Do not retag v0.2.5.
