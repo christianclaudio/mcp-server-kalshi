@@ -39,7 +39,7 @@ graph TD
 ## 🛡️ Safety by Default
 
 - **Sandbox Default:** The server targets Kalshi's **demo (sandbox)** environment unless `KALSHI_ENV=prod` is explicitly set.
-- **Simulation Preview Gating:** Mutating order tools (`create_order`, `amend_order`, `batch_create_orders`) require `confirm=true`. Without it, they return a structured simulation **preview** without placing orders.
+- **Simulation Preview Gating:** Mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) require `confirm=true`. Without it, they return a structured simulation **preview** and send nothing.
 - **Read-Only Mode:** Run with `KALSHI_READONLY=1` to restrict registration exclusively to 29 read-only inspection tools.
 - **Secret Scrubbing:** RSA private keys and tokens are scrubbed from error logs via `_redact_secrets()`.
 - **Intuitive Order Pricing:** Exposes intuitive whole **cents** limit pricing and automatically translates buy-NO ⇄ sell-YES orderbook math.

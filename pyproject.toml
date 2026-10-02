@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-kalshi"
-version = "0.2.5"
+version = "0.2.6"
 description = "An MCP server implementation for Kalshi prediction market endpoints"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,6 +25,8 @@ dev = [
     "pytest-asyncio",
     "pytest-cov",
     "pre-commit",
+    "build>=1.2.0",
+    "twine>=5.0.0",
 ]
 
 [build-system]

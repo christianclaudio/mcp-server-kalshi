@@ -1,5 +1,7 @@
 """Tests for the friendly->V2 order translation and the confirm-gate guardrail."""
 
+import json
+
 import pytest
 
 from mcp_server_kalshi.kalshi_client.client import (
@@ -134,3 +136,90 @@ async def test_create_order_confirm_places(monkeypatch):
     assert spy.create_calls[0]["side"] == "bid"
     assert spy.create_calls[0]["price"] == "0.4000"
     assert "placed" in out[0].text.lower()
+
+
+def _preview_body(content) -> dict:
+    return json.loads(content[0].text)
+
+
+async def test_cancel_family_preview_does_not_mutate(monkeypatch):
+    from mcp_server_kalshi import server
+
+    spy = _SpyClient()
+    monkeypatch.setattr(server, "kalshi_client", spy)
+
+    cases = [
+        (server.handle_cancel_order, {"order_id": "ord-1"}),
+        (server.handle_decrease_order, {"order_id": "ord-1", "reduce_by": 2}),
+        (server.handle_batch_cancel_orders, {"order_ids": ["ord-1", "ord-2"]}),
+        (server.handle_cancel_order_group, {"order_group_id": "grp-1"}),
+    ]
+    for handler, args in cases:
+        body = _preview_body(await handler(args))
+        assert body["preview"] is True
+        assert body["confirm_required"] is True
+        assert body["environment"] == server.settings.env_label
+        assert "confirm=true" in body["message"]
+    assert spy.create_calls == []
+
+
+async def test_cancel_family_confirm_mutates(monkeypatch):
+    from mcp_server_kalshi import server
+
+    class _MutatingSpy(_SpyClient):
+        def __init__(self):
+            super().__init__()
+            self.cancel_calls = []
+            self.decrease_calls = []
+            self.batch_cancel_calls = []
+            self.group_calls = []
+
+        async def cancel_order(self, order_id):
+            self.cancel_calls.append(order_id)
+            return {"canceled": True}
+
+        async def decrease_order(self, order_id, payload):
+            self.decrease_calls.append((order_id, payload))
+            return {"decreased": True}
+
+        async def batch_cancel_orders(self, order_ids):
+            self.batch_cancel_calls.append(order_ids)
+            return {"orders": order_ids}
+
+        async def cancel_order_group(self, order_group_id):
+            self.group_calls.append(order_group_id)
+            return {"canceled": True}
+
+    spy = _MutatingSpy()
+    monkeypatch.setattr(server, "kalshi_client", spy)
+
+    canceled = _preview_body(
+        await server.handle_cancel_order({"order_id": "ord-1", "confirm": True})
+    )
+    assert canceled["canceled"] is True
+    assert spy.cancel_calls == ["ord-1"]
+
+    decreased = _preview_body(
+        await server.handle_decrease_order(
+            {"order_id": "ord-1", "reduce_to": 1, "confirm": True}
+        )
+    )
+    assert decreased["decreased"] is True
+    assert spy.decrease_calls == [("ord-1", {"reduce_to": "1"})]
+
+    batch = _preview_body(
+        await server.handle_batch_cancel_orders(
+            {"order_ids": ["ord-1", "ord-2"], "confirm": True}
+        )
+    )
+    assert batch["canceled"] is True
+    assert batch["count"] == 2
+    assert spy.batch_cancel_calls == [["ord-1", "ord-2"]]
+
+    group = _preview_body(
+        await server.handle_cancel_order_group(
+            {"order_group_id": "grp-1", "confirm": True}
+        )
+    )
+    assert group["canceled"] is True
+    assert spy.group_calls == ["grp-1"]

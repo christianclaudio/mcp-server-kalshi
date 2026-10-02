@@ -95,6 +95,23 @@ async def test_all_discovered_kalshi_tools_live() -> None:
             ],
             "confirm": False,
         },
+        "decrease_order": {
+            "order_id": "00000000-0000-0000-0000-000000000000",
+            "reduce_by": 1,
+            "confirm": False,
+        },
+        "cancel_order": {
+            "order_id": "00000000-0000-0000-0000-000000000000",
+            "confirm": False,
+        },
+        "batch_cancel_orders": {
+            "order_ids": ["00000000-0000-0000-0000-000000000000"],
+            "confirm": False,
+        },
+        "cancel_order_group": {
+            "order_group_id": "00000000-0000-0000-0000-000000000000",
+            "confirm": False,
+        },
     }
 
     auth_required_tools: dict[str, dict[str, Any]] = {
@@ -105,16 +122,7 @@ async def test_all_discovered_kalshi_tools_live() -> None:
         "get_settlements": {},
         "list_orders": {},
         "get_order": {"order_id": "00000000-0000-0000-0000-000000000000"},
-        "decrease_order": {
-            "order_id": "00000000-0000-0000-0000-000000000000",
-            "reduce_by": 1,
-        },
-        "cancel_order": {"order_id": "00000000-0000-0000-0000-000000000000"},
-        "batch_cancel_orders": {"order_ids": ["00000000-0000-0000-0000-000000000000"]},
         "list_order_groups": {},
-        "cancel_order_group": {
-            "order_group_id": "00000000-0000-0000-0000-000000000000"
-        },
     }
 
     public_param_tools: dict[str, dict[str, Any]] = {

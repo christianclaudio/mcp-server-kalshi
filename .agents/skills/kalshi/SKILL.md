@@ -71,7 +71,7 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 1. **Environment Awareness**:
    - Always call `get_environment` first to determine whether the server is operating in `DEMO (sandbox)` or `PROD (real money)`.
 2. **Order Placement Safety Gate**:
-   - `create_order`, `amend_order`, and `batch_create_orders` will return a simulation **preview** unless explicitly called with `confirm=True`.
+   - `create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, and `cancel_order_group` return a simulation **preview** unless explicitly called with `confirm=True`.
    - Never call `confirm=True` on real money (`PROD`) without explicit user confirmation.
 3. **Read-Only Mode**:
    - When configured with `KALSHI_READONLY=1`, mutating order endpoints (`create_order`, `cancel_order`, `amend_order`, `decrease_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) are disabled at startup.
@@ -144,9 +144,10 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
    ```python
    batch_create_orders(orders=[...], confirm=True)
    ```
-4. Batch cancel resting exposure:
+4. Preview a batch cancel, then submit only after explicit confirmation:
    ```python
-   batch_cancel_orders(order_ids=["ord-1", "ord-2", "ord-3"])
+   batch_cancel_orders(order_ids=["ord-1", "ord-2", "ord-3"], confirm=False)
+   batch_cancel_orders(order_ids=["ord-1", "ord-2", "ord-3"], confirm=True)
    ```
 
 ### Recipe 3: Live Score Grounding & In-Game Hedging

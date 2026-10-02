@@ -272,6 +272,10 @@ class CreateOrderRequest(MCPSchemaBaseModel):
 
 class CancelOrderRequest(MCPSchemaBaseModel):
     order_id: str = Field(..., description="The order id to cancel.")
+    confirm: bool = Field(
+        default=False,
+        description="Must be true to cancel the order. False returns a preview only.",
+    )
 
 
 class AmendOrderRequest(MCPSchemaBaseModel):
@@ -301,6 +305,10 @@ class DecreaseOrderRequest(MCPSchemaBaseModel):
     reduce_by: float | None = Field(default=None, description="Contracts to remove.")
     reduce_to: float | None = Field(
         default=None, description="Target remaining contracts."
+    )
+    confirm: bool = Field(
+        default=False,
+        description="Must be true to decrease the order. False returns a preview only.",
     )
 
 
@@ -351,6 +359,10 @@ class BatchCancelOrdersRequest(MCPSchemaBaseModel):
 
     order_ids: list[str] = Field(
         ..., min_length=1, max_length=20, description="List of order IDs to cancel."
+    )
+    confirm: bool = Field(
+        default=False,
+        description="Must be true to cancel the batch. False returns a preview only.",
     )
 
 
@@ -426,3 +438,7 @@ class CancelOrderGroupRequest(MCPSchemaBaseModel):
     """Cancel / delete an order group."""
 
     order_group_id: str = Field(..., description="The order group ID to cancel.")
+    confirm: bool = Field(
+        default=False,
+        description="Must be true to cancel the order group. False returns a preview only.",
+    )

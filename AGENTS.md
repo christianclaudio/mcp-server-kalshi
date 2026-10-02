@@ -100,7 +100,7 @@ When translating an API endpoint or Kalshi documentation into an MCP tool, follo
      $$\text{buy-NO @ } p \equiv \text{sell-YES @ } (100 - p)$$
    - Never reimplement this inline — always reuse the central builders.
 2. **Mandatory `confirm=true` Gate**:
-   - Mutating order tools (`create_order`, `amend_order`, `batch_create_orders`) return a *preview* (human summary + exact payload) and place **nothing** unless `confirm=True`.
+   - Mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) return a *preview* (human summary + exact payload) and send **nothing** unless `confirm=True`.
 3. **Demo by Default**:
    - `KALSHI_ENV` defaults to `demo` (sandbox). Real money (`prod`) requires explicit opt-in. Every order response includes `settings.env_label`.
 4. **RSA-PSS Auth Signing**:

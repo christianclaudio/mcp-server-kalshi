@@ -45,7 +45,7 @@ KALSHI_READONLY=1 uvx --from git+https://github.com/christianclaudio/mcp-server-
 This strictly limits the server to **29 read-only discovery, research, and portfolio inspection tools**, removing all order creation, cancellation, and amendment endpoints from the agent context.
 
 ### 4. Safety Gating (`confirm: bool = False`)
-Mutating order tools (`create_order`, `amend_order`, `batch_create_orders`) return a simulation preview unless called with `confirm=True`. This prevents unintended order placement from hallucinated model outputs.
+Mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) return a simulation preview unless called with `confirm=True`. This prevents unintended order placement or cancellation from hallucinated model outputs.
 
 ---
 

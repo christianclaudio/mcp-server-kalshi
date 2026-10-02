@@ -157,9 +157,20 @@ async def test_all_24_handlers_execute_successfully(
     )
     assert out["placed"] is True
 
-    # 22. cancel_order
-    out = handler_result(await server.handle_cancel_order({"order_id": "ord-1"}))
+    # 22. cancel_order (preview vs confirmed)
+    preview_cancel = handler_result(
+        await server.handle_cancel_order({"order_id": "ord-1"})
+    )
+    assert preview_cancel["preview"] is True
+    assert preview_cancel["confirm_required"] is True
+    assert preview_cancel["environment"] == server.settings.env_label
+    assert "confirm=true" in preview_cancel["message"]
+    assert not fake.called("cancel_order")
+    out = handler_result(
+        await server.handle_cancel_order({"order_id": "ord-1", "confirm": True})
+    )
     assert out["canceled"] is True
+    assert fake.called("cancel_order")
 
     # 23. amend_order (preview vs confirmed)
     preview = handler_result(
@@ -191,11 +202,22 @@ async def test_all_24_handlers_execute_successfully(
     )
     assert confirmed["amended"] is True
 
-    # 24. decrease_order
-    out = handler_result(
+    # 24. decrease_order (preview vs confirmed)
+    preview_decrease = handler_result(
         await server.handle_decrease_order({"order_id": "ord-1", "reduce_by": 2})
     )
+    assert preview_decrease["preview"] is True
+    assert preview_decrease["confirm_required"] is True
+    assert preview_decrease["environment"] == server.settings.env_label
+    assert "confirm=true" in preview_decrease["message"]
+    assert not fake.called("decrease_order")
+    out = handler_result(
+        await server.handle_decrease_order(
+            {"order_id": "ord-1", "reduce_by": 2, "confirm": True}
+        )
+    )
     assert out["decreased"] is True
+    assert fake.called("decrease_order")
 
     # 25. batch_create_orders (preview vs confirm)
     preview_batch = handler_result(
@@ -244,12 +266,24 @@ async def test_all_24_handlers_execute_successfully(
     assert confirmed_batch["placed"] is True
     assert confirmed_batch["batch_size"] == 2
 
-    # 26. batch_cancel_orders
-    out = handler_result(
+    # 26. batch_cancel_orders (preview vs confirmed)
+    preview_batch_cancel = handler_result(
         await server.handle_batch_cancel_orders({"order_ids": ["ord-1", "ord-2"]})
+    )
+    assert preview_batch_cancel["preview"] is True
+    assert preview_batch_cancel["confirm_required"] is True
+    assert preview_batch_cancel["environment"] == server.settings.env_label
+    assert preview_batch_cancel["count"] == 2
+    assert "confirm=true" in preview_batch_cancel["message"]
+    assert not fake.called("batch_cancel_orders")
+    out = handler_result(
+        await server.handle_batch_cancel_orders(
+            {"order_ids": ["ord-1", "ord-2"], "confirm": True}
+        )
     )
     assert out["canceled"] is True
     assert out["count"] == 2
+    assert fake.called("batch_cancel_orders")
 
     # 27. get_portfolio_summary
     out = handler_result(await server.handle_get_portfolio_summary({}))
@@ -293,11 +327,22 @@ async def test_all_24_handlers_execute_successfully(
     out = handler_result(await server.handle_list_order_groups({"limit": 5}))
     assert out == {"ok": True}
 
-    # 36. cancel_order_group
-    out = handler_result(
+    # 36. cancel_order_group (preview vs confirmed)
+    preview_group = handler_result(
         await server.handle_cancel_order_group({"order_group_id": "grp-1"})
     )
+    assert preview_group["preview"] is True
+    assert preview_group["confirm_required"] is True
+    assert preview_group["environment"] == server.settings.env_label
+    assert "confirm=true" in preview_group["message"]
+    assert not fake.called("cancel_order_group")
+    out = handler_result(
+        await server.handle_cancel_order_group(
+            {"order_group_id": "grp-1", "confirm": True}
+        )
+    )
     assert out["canceled"] is True
+    assert fake.called("cancel_order_group")
 
 
 async def test_get_market_rules_handles_event_lookup_error(

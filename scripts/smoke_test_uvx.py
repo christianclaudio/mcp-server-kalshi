@@ -13,7 +13,7 @@ environment, so it catches failures our normal pytest suite cannot:
 Usage (the trailing argv is the command to run, exactly as uvx would):
 
     python scripts/smoke_test_uvx.py -- uvx --from dist/<wheel> mcp-server-kalshi
-    python scripts/smoke_test_uvx.py -- uvx mcp-server-kalshi@0.2.1   # from PyPI
+    python scripts/smoke_test_uvx.py -- uvx --from git+https://github.com/christianclaudio/mcp-server-kalshi mcp-server-kalshi
 
 Exits 0 on success, non-zero (with a diagnosis) on any failure.
 """
