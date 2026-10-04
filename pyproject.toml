@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-kalshi"
-version = "0.2.7"
+version = "0.2.8"
 description = "An MCP server implementation for Kalshi prediction market endpoints"
 readme = "README.md"
 requires-python = ">=3.10"

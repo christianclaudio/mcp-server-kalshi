@@ -8,7 +8,7 @@ import socket
 import httpx
 import pytest
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519
 
 from mcp_server_kalshi.kalshi_client.base import (
     KalshiAPIError,
@@ -109,19 +109,31 @@ async def test_authenticated_method_requires_credentials():
         await client.get_balance()
 
 
-def test_load_private_key_rejects_non_rsa_key(tmp_path):
-    # A valid PEM that isn't RSA (here EC) must be rejected, not silently accepted.
-    key = ec.generate_private_key(ec.SECP256R1())
-    pem = key.private_bytes(
+def test_load_private_key_accepts_ed25519_and_rejects_unrelated_type(tmp_path):
+    # Ed25519 and EC PKCS#8 PEMs share a BEGIN PRIVATE KEY banner. Accept
+    # Ed25519; reject a key type that is neither RSA nor Ed25519.
+    ed_key = ed25519.Ed25519PrivateKey.generate()
+    ed_pem = ed_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     )
-    key_file = tmp_path / "ec.pem"
-    key_file.write_bytes(pem)
+    ed_file = tmp_path / "ed25519.pem"
+    ed_file.write_bytes(ed_pem)
+    loaded = load_private_key_from_file(str(ed_file))
+    assert isinstance(loaded, ed25519.Ed25519PrivateKey)
 
-    with pytest.raises(ValueError, match="RSA"):
-        load_private_key_from_file(str(key_file))
+    ec_key = ec.generate_private_key(ec.SECP256R1())
+    ec_pem = ec_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    assert ec_pem.startswith(b"-----BEGIN PRIVATE KEY-----")
+    ec_file = tmp_path / "ec.pem"
+    ec_file.write_bytes(ec_pem)
+    with pytest.raises(ValueError, match="RSA or Ed25519"):
+        load_private_key_from_file(str(ec_file))
 
 
 async def test_client_context_manager_and_aclose(rsa_key_file):
