@@ -6,48 +6,72 @@ from typing import Any
 import httpx
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.asymmetric import ed25519, padding, rsa
 
 from ..errors import KalshiAPIError, redact_secrets
 from ..ssrf import avalidate_api_base_url, validate_api_base_url
 
+# Parsed key object, not the PEM banner. PKCS#8 RSA and Ed25519 both use
+# "BEGIN PRIVATE KEY".
+KalshiPrivateKey = rsa.RSAPrivateKey | ed25519.Ed25519PrivateKey
 
-def load_private_key_from_file(file_path: str) -> rsa.RSAPrivateKey:
-    """Load an RSA private key object from a PEM file."""
+
+def load_private_key_from_file(file_path: str) -> KalshiPrivateKey:
+    """Load an RSA or Ed25519 private key object from a PEM file.
+
+    The type is taken from the parsed key. A PKCS#8 RSA key and an Ed25519 key
+    both start with ``BEGIN PRIVATE KEY``, so the banner is not a type check.
+    """
     with open(file_path, "rb") as key_file:
         private_key = serialization.load_pem_private_key(
             key_file.read(), password=None, backend=default_backend()
         )
-    if not isinstance(private_key, rsa.RSAPrivateKey):
-        raise ValueError(
-            f"Expected an RSA private key in {file_path}, got {type(private_key).__name__}"
-        )
-    return private_key
+    if isinstance(private_key, (rsa.RSAPrivateKey, ed25519.Ed25519PrivateKey)):
+        return private_key
+    raise ValueError(
+        f"Expected an RSA or Ed25519 private key in {file_path}, "
+        f"got {type(private_key).__name__}"
+    )
 
 
 def sign_pss_text(private_key: rsa.RSAPrivateKey, text: str) -> str:
-    """Sign text with RSA-PSS (MGF1-SHA256, max salt) and base64-encode it.
+    """Sign text with RSA-PSS and base64-encode it.
 
-    This is the signature scheme Kalshi requires for the KALSHI-ACCESS-SIGNATURE header.
+    SHA-256, MGF1-SHA256, salt length equal to the digest length. This is the
+    RSA scheme Kalshi uses for the KALSHI-ACCESS-SIGNATURE header.
     """
     signature = private_key.sign(
-        text.encode(),
+        text.encode("utf-8"),
         padding.PSS(
-            mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.DIGEST_LENGTH,
         ),
         hashes.SHA256(),
     )
-    return base64.b64encode(signature).decode()
+    return base64.b64encode(signature).decode("utf-8")
+
+
+def sign_text(private_key: KalshiPrivateKey, text: str) -> str:
+    """Sign the Kalshi pre-sign string and return a base64 signature.
+
+    Ed25519 signs the message bytes directly (RFC 8032). RSA uses
+    :func:`sign_pss_text`.
+    """
+    if isinstance(private_key, ed25519.Ed25519PrivateKey):
+        signature = private_key.sign(text.encode("utf-8"))
+        return base64.b64encode(signature).decode("utf-8")
+    return sign_pss_text(private_key, text)
 
 
 class KalshiAuth(httpx.Auth):
     """Signs each request with the Kalshi API-key headers.
 
     The signed message is ``timestamp_ms + METHOD + path`` where ``path`` includes the
-    ``/trade-api/v2`` prefix but EXCLUDES the query string.
+    ``/trade-api/v2`` prefix but EXCLUDES the query string. Ed25519 signs that
+    message directly; RSA uses RSA-PSS with a digest-length salt.
     """
 
-    def __init__(self, private_key: rsa.RSAPrivateKey, api_key: str) -> None:
+    def __init__(self, private_key: KalshiPrivateKey, api_key: str) -> None:
         self._private_key = private_key
         self._api_key = api_key
 
@@ -59,7 +83,7 @@ class KalshiAuth(httpx.Auth):
         path = request.url.raw_path.decode().split("?", 1)[0]
         timestamp = str(int(time.time() * 1000))
         msg_string = timestamp + method + path
-        signature = sign_pss_text(self._private_key, msg_string)
+        signature = sign_text(self._private_key, msg_string)
 
         request.headers["KALSHI-ACCESS-KEY"] = self._api_key
         request.headers["KALSHI-ACCESS-SIGNATURE"] = signature
@@ -76,9 +100,9 @@ class BaseAPIClient:
     (e.g. ``/portfolio/balance``).
 
     Authentication is optional: when both ``api_key`` and ``private_key_path`` are
-    provided every request is RSA-PSS signed; otherwise requests are sent unsigned, which
-    is fine for public market-data endpoints. Authenticated endpoints raise a clear error
-    if creds are missing.
+    provided every request is signed with that key (RSA-PSS or Ed25519); otherwise
+    requests are sent unsigned, which is fine for public market-data endpoints.
+    Authenticated endpoints raise a clear error if creds are missing.
     """
 
     def __init__(
@@ -91,7 +115,7 @@ class BaseAPIClient:
         self._base_url: str = validate_api_base_url(base_url)
         self._timeout: int = timeout
         self._api_key: str | None = api_key
-        self._private_key: rsa.RSAPrivateKey | None = (
+        self._private_key: KalshiPrivateKey | None = (
             load_private_key_from_file(private_key_path) if private_key_path else None
         )
         self._client: httpx.AsyncClient | None = None

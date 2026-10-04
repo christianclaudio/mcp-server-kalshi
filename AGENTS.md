@@ -11,7 +11,7 @@ This is `mcp-server-kalshi` — an enterprise Model Context Protocol (MCP) serve
 **Lineage & Purpose**:
 - **Upstream Origin**: Maintained by christianclaudio as an enterprise-hardened fork of `9crusher/mcp-server-kalshi`.
 - **Primary Function**: Built for deep end-to-end trading workflows (market discovery → candidate research → legal settlement rules extraction → order simulation/placement).
-- **Core Stack**: Python 3.10+, `uv`, `fastmcp>=4.0.10` + `mcp>=2.2.0` (FastMCP 4 engine, lifespan management, host & origin protection, Spec 2026-07-28), `httpx` (async connection pooling & retry engine), `pydantic` v2, and `cryptography` (RSA-PSS signing).
+- **Core Stack**: Python 3.10+, `uv`, `fastmcp>=4.0.10` + `mcp>=2.2.0` (FastMCP 4 engine, lifespan management, host & origin protection, Spec 2026-07-28), `httpx` (async connection pooling & retry engine), `pydantic` v2, and `cryptography` (RSA-PSS and Ed25519 signing).
 - **Distribution**: Install from git or `ghcr.io/christianclaudio/mcp-server-kalshi`. This fork does not publish to public PyPI or the MCP Registry. Upstream owns the public package name `mcp-server-kalshi` and registry id `io.github.9crusher/mcp-server-kalshi`.
 
 ---
@@ -29,7 +29,7 @@ mcp-server-kalshi/
 │   ├── server.py                 # ToolRegistry, FastMCP 4 engine, lifespan, streamable HTTP bridge
 │   ├── kalshi_client/
 │   │   ├── __init__.py           # Client module exports
-│   │   ├── base.py               # BaseAPIClient (async httpx) + KalshiAuth (RSA-PSS signing) + KalshiAPIError
+│   │   ├── base.py               # BaseAPIClient (async httpx) + KalshiAuth (RSA-PSS and Ed25519 signing) + KalshiAPIError
 │   │   ├── client.py             # KalshiAPIClient: endpoint methods + build_*_order_payload translators
 │   │   ├── schemas.py            # Pydantic request models extending MCPSchemaBaseModel / _Paginated
 │   │   └── pdf.py                # fetch_pdf_text() — download and extract contract-terms PDF
@@ -40,7 +40,7 @@ mcp-server-kalshi/
 │   └── determine_bump.py         # Automated SemVer bump calculation based on conventional commits
 ├── tests/
 │   ├── conftest.py               # Shared fixtures and mock HTTP transports (offline only)
-│   ├── test_auth.py              # RSA-PSS signing format and query string exclusion tests
+│   ├── test_auth.py              # RSA-PSS and Ed25519 signing format and query string exclusion tests
 │   ├── test_client_endpoints.py  # Unit tests for API client methods
 │   ├── test_determine_bump.py    # Unit tests for SemVer bump calculation logic
 │   ├── test_orders.py            # Order translation, inversion, and confirm-gate tests
@@ -104,9 +104,9 @@ When translating an API endpoint or Kalshi documentation into an MCP tool, follo
    - Mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) return a *preview* (human summary + exact payload) and send **nothing** unless `confirm=True`.
 3. **Demo by Default**:
    - `KALSHI_ENV` defaults to `demo` (sandbox). Real money (`prod`) requires explicit opt-in. Every order response includes `settings.env_label`.
-4. **RSA-PSS Auth Signing**:
+4. **Request Signing (RSA-PSS and Ed25519)**:
    - `KalshiAuth` signs `timestamp_ms + METHOD + path`, where `path` includes `/trade-api/v2` but **strictly excludes the query string**.
-   - Uses RSA-PSS, MGF1-SHA256, max salt length. Never alter signed payload format without updating `tests/test_auth.py`.
+   - The key type comes from the parsed key object, not the PEM banner. Ed25519 signs that message directly (RFC 8032) and the signature is base64. RSA stays RSA-PSS with SHA-256, MGF1-SHA256, and a salt length equal to the digest length, then base64. Never alter the signed payload format without updating `tests/test_auth.py`.
 5. **Public vs. Authenticated Separation**:
    - Market discovery, legal rules, and candidate search work without credentials. Portfolio/order endpoints call `self._require_auth()` and fail-closed when keys are absent.
 6. **Secret Redaction**:

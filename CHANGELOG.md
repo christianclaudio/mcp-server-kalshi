@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.8] - 2026-10-04
+
+Proposed fork release. Not tagged.
+
+### Changed
+- Request signing accepts an Ed25519 private key (RFC 8032) or an RSA private key. The type comes from the parsed key object. A PKCS#8 RSA key, which also uses a `BEGIN PRIVATE KEY` banner, stays on RSA-PSS.
+- RSA-PSS uses SHA-256, MGF1-SHA256, and a salt length equal to the digest length. The headers stay `KALSHI-ACCESS-KEY`, `KALSHI-ACCESS-TIMESTAMP`, and `KALSHI-ACCESS-SIGNATURE`. The pre-sign text stays timestamp milliseconds + HTTP method + path, including `/trade-api/v2` and excluding the query string.
+
 ## [0.2.7] - 2026-10-02
 
 Proposed fork release. Not tagged.
