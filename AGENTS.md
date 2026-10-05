@@ -18,48 +18,17 @@ This is `mcp-server-kalshi` — an enterprise Model Context Protocol (MCP) serve
 
 ## 🏗️ Architecture Blueprint
 
-Data flows: request → Pydantic schema validation → API client → FastMCP 4 / low-level MCP server:
+Data flows: request → Pydantic schema validation → API client → FastMCP 4 / low-level MCP server.
 
-```
-mcp-server-kalshi/
-├── src/mcp_server_kalshi/
-│   ├── __init__.py               # Package version (__version__) and public exports
-│   ├── config.py                 # Pydantic Settings (env/.env). Safety default: KALSHI_ENV=demo
-│   ├── ssrf.py                   # Allowlist + private-range checks for API base and PDF URLs
-│   ├── server.py                 # ToolRegistry, FastMCP 4 engine, lifespan, streamable HTTP bridge
-│   ├── kalshi_client/
-│   │   ├── __init__.py           # Client module exports
-│   │   ├── base.py               # BaseAPIClient (async httpx) + KalshiAuth (RSA-PSS and Ed25519 signing) + KalshiAPIError
-│   │   ├── client.py             # KalshiAPIClient: endpoint methods + build_*_order_payload translators
-│   │   ├── schemas.py            # Pydantic request models extending MCPSchemaBaseModel / _Paginated
-│   │   └── pdf.py                # fetch_pdf_text() — download and extract contract-terms PDF
-├── scripts/
-│   ├── check_conformance.sh      # Official @modelcontextprotocol/conformance@0.1.16 test harness
-│   ├── check_tool_contract.py    # AST/reflection contract verifying 36 tools & MCP 2.0 annotations
-│   ├── check_openapi_drift.py    # AST visitor checking client methods against upstream Kalshi OpenAPI spec
-│   └── determine_bump.py         # Automated SemVer bump calculation based on conventional commits
-├── tests/
-│   ├── conftest.py               # Shared fixtures and mock HTTP transports (offline only)
-│   ├── test_auth.py              # RSA-PSS and Ed25519 signing format and query string exclusion tests
-│   ├── test_client_endpoints.py  # Unit tests for API client methods
-│   ├── test_determine_bump.py    # Unit tests for SemVer bump calculation logic
-│   ├── test_orders.py            # Order translation, inversion, and confirm-gate tests
-│   ├── test_handlers.py          # Tool handler execution tests
-│   ├── test_protocol.py          # Wire-level stdio, stateless streamable HTTP, and in-memory client tests
-│   └── test_server_comprehensive.py # Comprehensive server lifespan, tool execution, and host protection tests
-├── .github/workflows/
-│   ├── ci.yml                    # Lint, types, py3.10-3.13 tests, contract, drift, conformance (`uv sync --locked`)
-│   ├── release.yml               # v* tag: build, twine check, CycloneDX SBOM, GHCR; PyPI/registry gated off
-│   ├── kalshi-drift-monitor.yml  # Scheduled upstream schema and parameter drift check
-│   └── dependabot-automerge.yml  # Auto-merge non-major Dependabot updates
-├── fastmcp.json                  # FastMCP 4 manifest (source, entrypoint, environment, deployment)
-├── conformance-baseline.yml      # Conformance test harness expected failure baseline
-├── Dockerfile                    # Multi-stage container build running as non-root USER mcp
-├── server.json                   # Fork catalog metadata (GHCR/git install; not published to the registry)
-├── pyproject.toml                # Packaging metadata, entrypoint CLI, dependency pinning
-├── AGENTS.md                     # Agent guidance map, gotchas, and conventions (this file)
-└── README.md                     # User-facing installation, quickstart, and tool index
-```
+Key paths:
+- `src/mcp_server_kalshi/server.py` — `ToolRegistry`, every tool handler, FastMCP 4 engine, lifespan, streamable HTTP bridge.
+- `src/mcp_server_kalshi/kalshi_client/` — `base.py` (async httpx `BaseAPIClient`, `KalshiAuth` RSA-PSS/Ed25519 signing, `KalshiAPIError`), `client.py` (`KalshiAPIClient` endpoints + `build_*_order_payload` translators), `schemas.py` (Pydantic request models), `pdf.py` (contract-terms PDF text).
+- `src/mcp_server_kalshi/config.py` — Pydantic Settings; safety default `KALSHI_ENV=demo`. `ssrf.py` — allowlist and private-range checks for API base and PDF URLs.
+- `scripts/check_tool_contract.py` — source of truth for the expected tool set and annotations. Do not hard-code tool counts elsewhere.
+- `scripts/check_openapi_drift.py`, `scripts/check_conformance.sh` + `conformance-baseline.yml`, `scripts/determine_bump.py`.
+- `tests/` — offline only; signing format in `tests/test_auth.py`, order translation and confirm gate in `tests/test_orders.py`. `TESTING.md` covers test conventions.
+- `.github/workflows/` — `ci.yml`, `release.yml`, `kalshi-drift-monitor.yml`, `dependabot-automerge.yml`.
+- `server.json` (fork catalog metadata; not published to the registry), `Dockerfile`, `fastmcp.json`, `pyproject.toml`.
 
 Tool registration uses an explicit registry pattern: `@ToolRegistry.register_tool(name=..., description=..., input_schema=..., read_only=..., destructive=...)`. The server decorates low-level MCP handlers (`list_tools`, `call_tool`) serving the collected registry.
 
@@ -154,15 +123,10 @@ coderabbit review --agent --uncommitted
 
 ---
 
-## 🔄 CI/CD Matrix & Operational Release SOP
+## 🔄 CI & Releases
 
-The GitHub Actions CI matrix (`.github/workflows/ci.yml`) enforces:
-- Ruff lint, Ruff format, and Black format checks.
-- Mypy type checks.
-- Python 3.10, 3.11, 3.12, 3.13 test matrix with 100% coverage.
-- Tool contract and OpenAPI drift validation.
-- MCP protocol conformance.
-
-Installs use `uv sync --locked --all-extras`. Scheduled drift checks live in `kalshi-drift-monitor.yml`.
+CI is defined in `.github/workflows/ci.yml` (Ruff lint and format, mypy, tests on Python 3.10–3.13 at 100% coverage, tool contract, OpenAPI drift, build + `twine check`, conformance) and installs with `uv sync --locked --all-extras`. CI also runs `uv run black --check src tests`, which the command list above omits. Run all of these before opening a PR. Scheduled drift checks live in `kalshi-drift-monitor.yml`.
 
 A `v*` tag that matches `pyproject.toml` `project.version` runs `.github/workflows/release.yml`: build the wheel, `twine check`, write a CycloneDX SBOM, and publish a Docker image to `ghcr.io/christianclaudio/mcp-server-kalshi`. The PyPI and MCP Registry job in that workflow is disabled (`if: false`). There is no `deploy.yml`. Do not publish this fork to public PyPI or the MCP Registry.
+
+Do not create tags or releases unless the maintainer asks.
