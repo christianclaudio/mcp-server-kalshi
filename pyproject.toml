@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-kalshi"
-version = "0.2.8"
+version = "0.2.9"
 description = "An MCP server implementation for Kalshi prediction market endpoints"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -8,7 +8,7 @@ license = {text = "MIT"}
 
 dependencies = [
     "mcp>=2.2.0",
-    "fastmcp>=4.0.10",
+    "fastmcp>=4.0.11",
     "httpx>=0.28.1",
     "cryptography>=50.0.0",
     "pypdf",
