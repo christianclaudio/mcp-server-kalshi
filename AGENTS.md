@@ -26,7 +26,7 @@ Key paths:
 - `src/mcp_server_kalshi/config.py` — Pydantic Settings; safety default `KALSHI_ENV=demo`. `ssrf.py` — allowlist and private-range checks for API base and PDF URLs.
 - `scripts/check_tool_contract.py` — source of truth for the expected tool set and annotations. Do not hard-code tool counts elsewhere.
 - `scripts/check_openapi_drift.py`, `scripts/check_conformance.sh` + `conformance-baseline.yml`, `scripts/determine_bump.py`.
-- `tests/` — offline only; signing format in `tests/test_auth.py`, order translation and confirm gate in `tests/test_orders.py`. `TESTING.md` covers test conventions.
+- `tests/` — unit tests are offline; live network tests live in `tests/test_e2e_live.py` (run via `-m e2e`). Signing format in `tests/test_auth.py`, order translation and confirm gate in `tests/test_orders.py`. `TESTING.md` covers test conventions.
 - `.github/workflows/` — `ci.yml`, `release.yml`, `kalshi-drift-monitor.yml`, `dependabot-automerge.yml`.
 - `server.json` (fork catalog metadata; not published to the registry), `Dockerfile`, `fastmcp.json`, `pyproject.toml`.
 
