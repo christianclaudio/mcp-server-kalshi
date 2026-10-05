@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.9] - 2026-10-05
+
+Proposed fork release. Not tagged.
+
+### Security
+- Raised the FastMCP floor from `>=4.0.10` to `>=4.0.11` in `pyproject.toml` and `fastmcp.json`. The lockfile resolves FastMCP 4.0.11. No server code changes.
+
 ## [0.2.8] - 2026-10-04
 
 Proposed fork release. Not tagged.

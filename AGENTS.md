@@ -11,7 +11,7 @@ This is `mcp-server-kalshi` — an enterprise Model Context Protocol (MCP) serve
 **Lineage & Purpose**:
 - **Upstream Origin**: Maintained by christianclaudio as an enterprise-hardened fork of `9crusher/mcp-server-kalshi`.
 - **Primary Function**: Built for deep end-to-end trading workflows (market discovery → candidate research → legal settlement rules extraction → order simulation/placement).
-- **Core Stack**: Python 3.10+, `uv`, `fastmcp>=4.0.10` + `mcp>=2.2.0` (FastMCP 4 engine, lifespan management, host & origin protection, Spec 2026-07-28), `httpx` (async connection pooling & retry engine), `pydantic` v2, and `cryptography` (RSA-PSS and Ed25519 signing).
+- **Core Stack**: Python 3.10+, `uv`, `fastmcp>=4.0.11` + `mcp>=2.2.0` (FastMCP 4 engine, lifespan management, host & origin protection, Spec 2026-07-28), `httpx` (async connection pooling & retry engine), `pydantic` v2, and `cryptography` (RSA-PSS and Ed25519 signing).
 - **Distribution**: Install from git or `ghcr.io/christianclaudio/mcp-server-kalshi`. This fork does not publish to public PyPI or the MCP Registry. Upstream owns the public package name `mcp-server-kalshi` and registry id `io.github.9crusher/mcp-server-kalshi`.
 
 ---
