@@ -32,7 +32,7 @@ This MCP server executes trades and manages financial balances on the Kalshi exc
 - Authenticated requests are signed with your private key: RSA-PSS (SHA-256) or Ed25519. The server picks the scheme from the parsed key type.
 - **Never commit `.pem` private key files or API key IDs to version control.**
 - Place private keys in standard restricted paths (e.g. `chmod 600 ~/.kalshi/rsa.pem`).
-- Credentials and private keys are scrubbed from error logs by `redact_secrets()` (`errors.py`).
+- Exception text returned by the server is scrubbed by `redact_secrets()` (`errors.py`).
 
 ### 3. Read-Only Mode (`KALSHI_READONLY=1`)
 When connecting this server to autonomous agents, research workflows, or shared chat assistants, run with:
