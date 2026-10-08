@@ -36,7 +36,7 @@ uv run pytest --cov=src/mcp_server_kalshi --cov-fail-under=100 -v
 Before submitting your pull request, run our verification gates:
 
 ### 1. Tool Contract Validation
-Asserts registered tool counts, input schemas, and MCP 2.0 behavioral annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`):
+Asserts registered tool counts, input schemas, and MCP tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`):
 ```bash
 uv run python scripts/check_tool_contract.py
 ```
@@ -66,7 +66,7 @@ uv run mypy
 
 ## 🛠️ How to Add a New Kalshi MCP Tool
 
-Adding a tool takes 3 steps:
+Adding a tool takes 4 steps:
 
 1. **Add Request Schema** (`src/mcp_server_kalshi/kalshi_client/schemas.py`):
    ```python
@@ -97,11 +97,13 @@ Adding a tool takes 3 steps:
        return await kalshi_client.get_something(req.item_id)
    ```
 
+4. **Add Contract Entry** (`scripts/check_tool_contract.py`): add the tool to `EXPECTED_ANNOTATIONS` with its four hints (see Tool Annotations below).
+
 ---
 
 ## 🏷️ Tool Annotations
 
-Every tool passes all four hints to `@ToolRegistry.register_tool`: `read_only`, `destructive`, `idempotent`, and `open_world`. `idempotent` and `open_world` default to `None` (the hint is omitted), so set them explicitly. `scripts/check_tool_contract.py` asserts the expected `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` for every registered tool, so add the new tool's entry there too.
+Every tool passes all four hints to `@ToolRegistry.register_tool`: `read_only`, `destructive`, `idempotent`, and `open_world`. `idempotent` and `open_world` default to `None` (the hint is omitted), so set them explicitly. `scripts/check_tool_contract.py` asserts the expected `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` for every registered tool (step 4 above).
 
 ---
 
@@ -111,4 +113,3 @@ Every tool passes all four hints to `@ToolRegistry.register_tool`: `read_only`, 
 - **Squash Merging**: PRs are squash-merged into `main` with clean commit titles. The squash commit message is the PR body.
 - **Versions**: Do not edit version numbers or `CHANGELOG.md`. The git tag is the version, and GitHub Releases are the changelog.
 - **Breaking changes**: every breaking PR (any `type!:` title, such as `feat!:` or `fix!:`) carries a `BREAKING CHANGE:` footer, with the migration steps, as the final paragraph of the PR body before CodeRabbit's generated summary. `scripts/release_notes.py` stops at the CodeRabbit marker line and ignores everything after it, so a footer inside that summary never reaches the release notes.
-

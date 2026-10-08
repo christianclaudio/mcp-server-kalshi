@@ -15,12 +15,12 @@ jobs:
     name: Check OpenAPI Drift
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           persist-credentials: false
           # Full history and tags: the package version comes from the git tag.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -37,11 +37,13 @@ jobs:
           echo "check_openapi_drift.py exited $rc"
       - name: Create forge-todo issue
         if: steps.drift.outputs.rc != '0'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
+        env:
+          DRIFT_RC: ${{ steps.drift.outputs.rc }}
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         with:
           script: |
             const fs = require('fs');
-            const rc = '${{ steps.drift.outputs.rc }}';
+            const rc = process.env.DRIFT_RC;
             const out = fs.existsSync('drift_results.txt') ? fs.readFileSync('drift_results.txt', 'utf8') : '';
             const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             // check_openapi_drift.py prints this line only right before it returns 1
@@ -63,6 +65,8 @@ jobs:
             });
       - name: Fail the run
         if: steps.drift.outputs.rc != '0'
+        env:
+          DRIFT_RC: ${{ steps.drift.outputs.rc }}
         run: |
-          echo "::error::check_openapi_drift.py exited ${{ steps.drift.outputs.rc }}"
+          echo "::error::check_openapi_drift.py exited ${DRIFT_RC}"
           exit 1

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build for mcp-server-kalshi
-# Produces a minimal runtime image (~150MB) with no dev tooling.
+# Produces a slim runtime image with no dev tooling.
 
 # ─── Stage 1: Builder ─────────────────────────────────────────────────────────
 FROM python:3.12-slim AS builder

@@ -1,5 +1,5 @@
 ---
-name: kalshi
+name: kalshi-mcp
 description: Enterprise Agent Skill for researching, discovery, rules extraction, and executing trades on Kalshi prediction markets via mcp-server-kalshi.
 ---
 

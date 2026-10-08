@@ -17,7 +17,7 @@ graph TD
     Config -->|"Default: demo"| EnvSelect{"Environment Router"}
     EnvSelect -->|"demo"| DemoAPI["Kalshi Demo API (demo-api.kalshi.co)"]
     EnvSelect -->|"prod"| ProdAPI["Kalshi Live Exchange (api.elections.kalshi.com)"]
-    Server --> ClientPool["KalshiClient (httpx.AsyncClient + RSA SHA256 Signing)"]
+    Server --> ClientPool["KalshiAPIClient (httpx.AsyncClient + RSA-PSS or Ed25519 signing)"]
     ClientPool --> EnvSelect
 ```
 
@@ -41,7 +41,7 @@ graph TD
 - **Sandbox Default:** The server targets Kalshi's **demo (sandbox)** environment unless `KALSHI_ENV=prod` is explicitly set.
 - **Simulation Preview Gating:** Mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) require `confirm=true`. Without it, they return a structured simulation **preview** and send nothing.
 - **Read-Only Mode:** Run with `KALSHI_READONLY=1` to restrict registration exclusively to 29 read-only inspection tools.
-- **Secret Scrubbing:** RSA private keys and tokens are scrubbed from error logs via `_redact_secrets()`.
+- **Secret Scrubbing:** Private keys (PEM), API keys, request signatures, and Bearer tokens are scrubbed from error logs via `redact_secrets()`.
 - **Intuitive Order Pricing:** Exposes intuitive whole **cents** limit pricing and automatically translates buy-NO ⇄ sell-YES orderbook math.
 
 ---
@@ -52,7 +52,7 @@ graph TD
 | :--- | :---: | :--- |
 | `KALSHI_ENV` | `demo` | `demo` (sandbox) or `prod` (real money). |
 | `KALSHI_API_KEY` / `KALSHI_API_KEY_ID` | _(none)_ | Kalshi API key ID. Required for portfolio and order tools. |
-| `KALSHI_PRIVATE_KEY_PATH` | _(none)_ | Path to your RSA private key `.pem`. |
+| `KALSHI_PRIVATE_KEY_PATH` | _(none)_ | Path to your RSA or Ed25519 private key `.pem`. |
 | `KALSHI_READONLY` | `0` / `false` | When enabled (`1`), disables all mutating order endpoints at startup. |
 | `BASE_URL` | _(derived)_ | Optional REST override. Only `https://demo-api.kalshi.co/trade-api/v2` or `https://api.elections.kalshi.com/trade-api/v2`. |
 
@@ -144,13 +144,17 @@ python -m mcp_server_kalshi.server --transport streamable-http --host 127.0.0.1 
     "kalshi": {
       "command": "docker",
       "args": ["run", "--rm", "-i",
-        "-e", "KALSHI_ENV", "-e", "KALSHI_API_KEY", "-e", "KALSHI_PRIVATE_KEY_PATH",
+        "-v", "/path/to/kalshi-key.pem:/home/mcp/kalshi-key.pem:ro",
+        "-e", "KALSHI_ENV", "-e", "KALSHI_API_KEY",
+        "-e", "KALSHI_PRIVATE_KEY_PATH=/home/mcp/kalshi-key.pem",
         "ghcr.io/christianclaudio/mcp-server-kalshi:latest"
       ]
     }
   }
 }
 ```
+
+The image runs as the non-root `mcp` user, so the mounted key file must be readable by that user.
 
 ---
 

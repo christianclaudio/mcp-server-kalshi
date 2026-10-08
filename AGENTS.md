@@ -41,7 +41,7 @@ When translating an API endpoint or Kalshi documentation into an MCP tool, follo
 
 ### 1. Pydantic Request Schema (`kalshi_client/schemas.py`)
 - Add a request model extending `MCPSchemaBaseModel` (or `_Paginated` if endpoint paginates).
-- Every field must use `Field(...)` with a clear description and accurate optionality (`Optional[...] = Field(default=None, ...)`).
+- Every field must use `Field(...)` with a clear description and accurate optionality (`X | None = Field(default=None, ...)`).
 - Use `Literal[...]` for enums. Field docs become parameter documentation in the generated MCP `inputSchema`.
 
 ### 2. Client Method (`kalshi_client/client.py`)
@@ -57,7 +57,7 @@ When translating an API endpoint or Kalshi documentation into an MCP tool, follo
 ### 4. Pure Offline Testing & Contract Sync (`tests/`)
 - Add unit tests in `tests/` mocking responses via `httpx.MockTransport`.
 - **Zero live network calls during tests.** Keep tests 100% offline.
-- Run `uv run python scripts/check_tool_contract.py` and update counts if adding tools.
+- Add the new tool to `EXPECTED_ANNOTATIONS` in `scripts/check_tool_contract.py` (the expected count comes from it), then run `uv run python scripts/check_tool_contract.py`.
 - Ensure test coverage remains at **100.0%**.
 
 ---
@@ -101,7 +101,7 @@ When translating an API endpoint or Kalshi documentation into an MCP tool, follo
 uv sync --locked --extra dev
 
 # Lint and formatting
-uv run ruff check . && uv run ruff format --check .
+uv run ruff check . && uv run ruff format --check . && uv run black --check src tests
 
 # Strict type checking
 uv run mypy
@@ -135,7 +135,7 @@ coderabbit review --agent --uncommitted
 
 ## 🔄 CI & Releases
 
-CI is defined in `.github/workflows/ci.yml` (Ruff lint and format, Black, mypy, tests on Python 3.10–3.13 at 100% coverage, tool contract, OpenAPI drift, build + `scripts/check_version.py` + `twine check`, conformance) and installs with `uv sync --locked --all-extras`. CI also runs `uv run black --check src tests`, which the command list above omits. Jobs that install or build the package check out with `fetch-depth: 0`, because a shallow checkout has no reachable tag and reports `0.0.1.devN`. The Docker build context has no `.git`, so `release.yml` passes the tag version as `UV_DYNAMIC_VERSIONING_BYPASS`. Run all of these before opening a PR. Scheduled drift checks live in `kalshi-drift-monitor.yml`: it captures the drift check's exit code explicitly, and on a non-zero exit opens a `forge-todo` issue (titled as drift only when the check reported drift; otherwise "drift monitor failed") and fails the run.
+CI is defined in `.github/workflows/ci.yml` (Ruff lint and format, Black, mypy, tests on Python 3.10–3.13 at 100% coverage, tool contract, OpenAPI drift, build + `scripts/check_version.py` + `twine check`, conformance) and installs with `uv sync --locked --all-extras`. Jobs that install or build the package check out with `fetch-depth: 0`, because a shallow checkout has no reachable tag and reports `0.0.1.devN`. The Docker build context has no `.git`, so `release.yml` passes the tag version as `UV_DYNAMIC_VERSIONING_BYPASS`. Run all of these before opening a PR. Scheduled drift checks live in `kalshi-drift-monitor.yml`: it captures the drift check's exit code explicitly, and on a non-zero exit opens a `forge-todo` issue (titled as drift only when the check reported drift; otherwise "drift monitor failed") and fails the run.
 
 A `v*` tag runs `.github/workflows/release.yml`: build the wheel with full history, check the wheel's version matches the tag, `twine check`, write a CycloneDX SBOM, build the release notes, create the GitHub Release (notes, wheel, sdist, SBOM), and only then publish the Docker image to `ghcr.io/christianclaudio/mcp-server-kalshi` (`:X.Y.Z` and `:latest`). The PyPI step and the MCP Registry job stay commented out: upstream owns the public PyPI name `mcp-server-kalshi` and the registry id `io.github.9crusher/mcp-server-kalshi`. There is no `deploy.yml`. Do not publish this fork to public PyPI or the MCP Registry.
 

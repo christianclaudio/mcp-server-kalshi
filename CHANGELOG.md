@@ -5,7 +5,7 @@
 
 This file covers the fork's changes through 0.2.7, the last version this fork published (git tag `v0.2.7` and the GHCR image `ghcr.io/christianclaudio/mcp-server-kalshi:0.2.7`). The `0.2.9` and `0.2.8` entries were pending at the freeze: neither was tagged or published, so both ship in the first release after 0.2.7, whose version comes from its tag.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and release tags follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
@@ -60,6 +60,8 @@ Never tagged on its own. These changes shipped in the `v0.2.7` tag and image. Fl
 - Public PyPI and MCP Registry publish from this fork. `release.yml` keeps build, twine check, CycloneDX SBOM, and GHCR image publish. The PyPI and `mcp-publisher` job is gated with `if: false`. Removed `.github/workflows/deploy.yml`.
 
 ## [0.2.4] - 2026-08-28
+
+Never tagged by this fork. The `v0.2.4` tag and the PyPI 0.2.4 release are upstream's (`9crusher/mcp-server-kalshi`) and do not contain these changes; they shipped in the `v0.2.7` tag and image.
 
 ### Added
 - **MCP 2.0 Behavioral Annotations**: Added `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` across all 36 registered tools.
