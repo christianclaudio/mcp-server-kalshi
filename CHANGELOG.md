@@ -1,22 +1,24 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+> **This file is frozen as of 0.2.7. Release notes now live on [GitHub Releases](https://github.com/christianclaudio/mcp-server-kalshi/releases).**
+> Each release body is generated from the squash commits since the previous tag by `scripts/release_notes.py`, including every `BREAKING CHANGE:` footer and its migration steps. Do not add entries here; the history below is kept for reference.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+This file covers the fork's changes through 0.2.7, the last version this fork published (git tag `v0.2.7` and the GHCR image `ghcr.io/christianclaudio/mcp-server-kalshi:0.2.7`). The `0.2.9` and `0.2.8` entries were pending at the freeze: neither was tagged or published, so both ship in the first release after 0.2.7, whose version comes from its tag.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and release tags follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
 ## [0.2.9] - 2026-10-05
 
-Proposed fork release. Not tagged.
+*Frozen: never tagged or published. This entry was pending at the freeze and ships in the first GitHub Release after 0.2.7; later changes are listed on [GitHub Releases](https://github.com/christianclaudio/mcp-server-kalshi/releases).*
 
 ### Security
 - Raised the FastMCP floor from `>=4.0.10` to `>=4.0.11` in `pyproject.toml` and `fastmcp.json`. The lockfile resolves FastMCP 4.0.11. No server code changes.
 
 ## [0.2.8] - 2026-10-04
 
-Proposed fork release. Not tagged.
+*Frozen: never tagged or published. This entry was pending at the freeze and ships in the first GitHub Release after 0.2.7; later changes are listed on [GitHub Releases](https://github.com/christianclaudio/mcp-server-kalshi/releases).*
 
 ### Changed
 - Request signing accepts an Ed25519 private key (RFC 8032) or an RSA private key. The type comes from the parsed key object. A PKCS#8 RSA key, which also uses a `BEGIN PRIVATE KEY` banner, stays on RSA-PSS.
@@ -24,7 +26,7 @@ Proposed fork release. Not tagged.
 
 ## [0.2.7] - 2026-10-02
 
-Proposed fork release. Not tagged.
+Tagged `v0.2.7` and published as the GHCR image `ghcr.io/christianclaudio/mcp-server-kalshi:0.2.7`. No GitHub Release was created for it.
 
 ### Security
 - `BASE_URL` is accepted only as `https` on `demo-api.kalshi.co` or `api.elections.kalshi.com`, with path `/trade-api/v2`. Private, loopback, link-local, metadata, and other hosts are rejected.
@@ -33,7 +35,7 @@ Proposed fork release. Not tagged.
 
 ## [0.2.6] - 2026-10-02
 
-Proposed fork release. Not tagged. Proxus → Christian must approve this SemVer before any tag. Do not retag v0.2.5.
+Never tagged on its own. These changes shipped in the `v0.2.7` tag and image.
 
 ### Changed
 - `cancel_order`, `decrease_order`, `batch_cancel_orders`, and `cancel_order_group` return a preview unless `confirm=true`, matching `create_order` and `amend_order`.
@@ -44,7 +46,7 @@ Proposed fork release. Not tagged. Proxus → Christian must approve this SemVer
 
 ## [0.2.5] - 2026-10-01
 
-Proposed fork release. Not tagged. Flat tool names are unchanged.
+Never tagged on its own. These changes shipped in the `v0.2.7` tag and image. Flat tool names are unchanged.
 
 ### Changed
 - Raised the FastMCP floor from `>=4.0.5` to `>=4.0.10`. The lockfile resolves FastMCP 4.0.10.

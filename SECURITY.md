@@ -6,10 +6,7 @@
 
 ## 🔒 Supported Versions
 
-| Version | Supported |
-| :--- | :---: |
-| `0.2.x` | ✅ Yes |
-| `< 0.2` | ❌ No |
+Only the latest release receives security fixes. Upgrade to the newest version on [Releases](https://github.com/christianclaudio/mcp-server-kalshi/releases).
 
 ---
 

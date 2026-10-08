@@ -181,4 +181,4 @@ uv run python scripts/check_openapi_drift.py
 - 🛡️ [Security Policy & Guidelines](SECURITY.md)
 - 🤝 [Contributing Guidelines](CONTRIBUTING.md)
 - 🧪 [Testing & Verification Invariants](TESTING.md)
-- 📝 [Changelog](CHANGELOG.md)
+- 📝 [Changelog (GitHub Releases)](https://github.com/christianclaudio/mcp-server-kalshi/releases)

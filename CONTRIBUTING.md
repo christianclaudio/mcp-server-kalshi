@@ -99,7 +99,16 @@ Adding a tool takes 3 steps:
 
 ---
 
-## 🔀 Pull Request Merging & Git History
+## 🏷️ Tool Annotations
+
+Every tool passes all four hints to `@ToolRegistry.register_tool`: `read_only`, `destructive`, `idempotent`, and `open_world`. `idempotent` and `open_world` default to `None` (the hint is omitted), so set them explicitly. `scripts/check_tool_contract.py` asserts the expected `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` for every registered tool, so add the new tool's entry there too.
+
+---
+
+## 🔀 Pull Requests, Versions & Git History
 
 - **Conventional Commits**: Format commit messages as `feat: ...`, `fix: ...`, `docs: ...`, `test: ...`.
-- **Squash Merging**: PRs are squash-merged into `main` with clean commit titles.
+- **Squash Merging**: PRs are squash-merged into `main` with clean commit titles. The squash commit message is the PR body.
+- **Versions**: Do not edit version numbers or `CHANGELOG.md`. The git tag is the version, and GitHub Releases are the changelog.
+- **Breaking changes**: every breaking PR (any `type!:` title, such as `feat!:` or `fix!:`) carries a `BREAKING CHANGE:` footer, with the migration steps, as the final paragraph of the PR body before CodeRabbit's generated summary. `scripts/release_notes.py` stops at the CodeRabbit marker line and ignores everything after it, so a footer inside that summary never reaches the release notes.
+
