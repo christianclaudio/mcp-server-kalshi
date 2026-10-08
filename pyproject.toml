@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-kalshi"
-version = "0.2.9"
+dynamic = ["version"]
 description = "An MCP server implementation for Kalshi prediction market endpoints"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -30,24 +30,37 @@ dev = [
 ]
 
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.32.4,<2", "uv-dynamic-versioning>=0.14.1,<0.15"]
+build-backend = "hatchling.build"
 
-[tool.setuptools]
-package-dir = { "" = "src" }
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+bump = true
+fallback-version = "0.0.0"
 
-[tool.setuptools.package-data]
-# Ship the PEP 561 marker so downstream consumers get our type hints.
-mcp_server_kalshi = ["py.typed"]
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_server_kalshi"]
 
 [project.scripts]
 start = "mcp_server_kalshi.server:main"
 mcp-server-kalshi = "mcp_server_kalshi.server:main"
 test = "pytest:main"
 format = "black:main"
+
+
+[project.urls]
+Homepage = "https://github.com/christianclaudio/mcp-server-kalshi"
+Repository = "https://github.com/christianclaudio/mcp-server-kalshi"
+Issues = "https://github.com/christianclaudio/mcp-server-kalshi/issues"
+Documentation = "https://github.com/christianclaudio/mcp-server-kalshi#readme"
+Changelog = "https://github.com/christianclaudio/mcp-server-kalshi/releases"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
