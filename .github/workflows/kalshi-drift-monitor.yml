@@ -15,23 +15,54 @@ jobs:
     name: Check OpenAPI Drift
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+          # Full history and tags: the package version comes from the git tag.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5
         with:
           python-version: "3.12"
       - name: Install dependencies
         run: uv sync --locked --all-extras
+      # Capture the exit code explicitly so the issue step keys on the drift
+      # check's own result rather than on any earlier step failing.
       - name: Run drift detection
         id: drift
-        run: uv run python scripts/check_openapi_drift.py
-      - name: Create issue on failure
-        if: failure()
-        uses: actions/github-script@v7
+        run: |
+          set +e
+          uv run python scripts/check_openapi_drift.py 2>&1 | tee drift_results.txt
+          rc=${PIPESTATUS[0]}
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          echo "check_openapi_drift.py exited $rc"
+      - name: Create forge-todo issue
+        if: steps.drift.outputs.rc != '0'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
         with:
           script: |
-            github.rest.issues.create({
+            const fs = require('fs');
+            const rc = '${{ steps.drift.outputs.rc }}';
+            const out = fs.existsSync('drift_results.txt') ? fs.readFileSync('drift_results.txt', 'utf8') : '';
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            // check_openapi_drift.py prints this line only right before it returns 1
+            // for a real drift. Exit 1 without it (spec fetch failure, uncaught
+            // exception) or any other code is a failed run, not a drift result.
+            const drift = rc === '1' && out.includes('[!] OpenAPI drift check FAILED.');
+            const title = drift
+              ? 'Kalshi OpenAPI drift: client routes or parameters no longer match the spec'
+              : `Kalshi drift monitor failed (exit ${rc})`;
+            const lead = drift
+              ? 'The scheduled drift monitor found client calls in `KalshiAPIClient` that are missing from, or deprecated in, `https://docs.kalshi.com/openapi.yaml`. Update the client routes or `scripts/drift_allowlist.txt`.'
+              : 'The scheduled drift monitor did not produce a drift result: `scripts/check_openapi_drift.py` failed before finishing (for example, the spec could not be fetched). Re-run the workflow before treating this as drift.';
+            await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: "🚨 Alert: Kalshi OpenAPI Drift Detected",
-              body: "The scheduled OpenAPI drift monitor detected changes or missing paths in `https://docs.kalshi.com/openapi.yaml` relative to `KalshiAPIClient`.\n\nPlease inspect `scripts/check_openapi_drift.py` and update client routes as needed."
-            })
+              title,
+              labels: ['forge-todo'],
+              body: `${lead}\n\nRun: ${run}\n\n\`\`\`\n${out.slice(-60000)}\n\`\`\`\n`,
+            });
+      - name: Fail the run
+        if: steps.drift.outputs.rc != '0'
+        run: |
+          echo "::error::check_openapi_drift.py exited ${{ steps.drift.outputs.rc }}"
+          exit 1
