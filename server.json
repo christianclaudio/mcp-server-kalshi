@@ -6,15 +6,15 @@
     "url": "https://github.com/christianclaudio/mcp-server-kalshi",
     "source": "github"
   },
-  "version": "0.2.9",
+  "version": "0.0.0",
   "packages": [
     {
       "registryType": "oci",
-      "registryBaseUrl": "https://ghcr.io",
-      "identifier": "ghcr.io/christianclaudio/mcp-server-kalshi",
-      "version": "0.2.9",
+      "identifier": "ghcr.io/christianclaudio/mcp-server-kalshi:0.0.0",
       "runtimeHint": "docker",
-      "transport": { "type": "stdio" },
+      "transport": {
+        "type": "stdio"
+      },
       "environmentVariables": [
         {
           "name": "KALSHI_ENV",

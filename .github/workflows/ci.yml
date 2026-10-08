@@ -8,18 +8,18 @@ on:
 
 permissions:
   contents: read
-  security-events: write
-  actions: read
 
 jobs:
   lint:
     name: Lint, format and types
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
+          # Full history and tags: the package version comes from the git tag.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -41,10 +41,12 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
+          # Full history and tags: the package version comes from the git tag.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
@@ -56,10 +58,12 @@ jobs:
     name: Tool contract verification
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
+          # Full history and tags: the package version comes from the git tag.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -71,10 +75,12 @@ jobs:
     name: OpenAPI drift check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
+          # Full history and tags: the package version comes from the git tag.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -86,20 +92,24 @@ jobs:
     name: Build and package check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
+          # Full history and tags: the package version comes from the git tag.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           python-version: "3.12"
       - name: Install dependencies
         run: uv sync --locked --all-extras
       - name: Build sdist and wheel
         run: uv run python -m build
+      - name: Reject fallback and untagged versions
+        run: uv run python scripts/check_version.py
       - name: Twine check
         run: uv run twine check dist/*
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: dist-${{ github.sha }}
           path: dist/
@@ -109,16 +119,18 @@ jobs:
     name: MCP Protocol Conformance
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
+          # Full history and tags: the package version comes from the git tag.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           python-version: "3.12"
       - name: Install dependencies
         run: uv sync --locked --all-extras
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: "22"
       - name: Run MCP conformance suite

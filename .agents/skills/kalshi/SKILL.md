@@ -1,7 +1,6 @@
 ---
 name: kalshi
 description: Enterprise Agent Skill for researching, discovery, rules extraction, and executing trades on Kalshi prediction markets via mcp-server-kalshi.
-version: 0.2.9
 ---
 
 # Kalshi Prediction Markets Agent Skill

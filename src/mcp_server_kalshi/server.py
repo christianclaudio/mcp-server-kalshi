@@ -9,7 +9,6 @@ import uuid
 from collections.abc import AsyncIterator, Callable, Coroutine, Sequence
 from contextlib import asynccontextmanager
 from functools import wraps
-from importlib.metadata import PackageNotFoundError, version
 from typing import Any, cast
 
 import mcp.server.stdio as mcp_server_stdio
@@ -20,6 +19,7 @@ from fastmcp.tools.function_tool import FunctionTool
 from mcp.server.lowlevel import NotificationOptions
 from mcp.server.models import InitializationOptions
 
+from . import __version__
 from .config import get_settings
 from .errors import redact_secrets
 from .kalshi_client import KalshiAPIClient
@@ -67,11 +67,6 @@ from .kalshi_client.schemas import (
     MCPSchemaBaseModel,
 )
 from .ssrf import avalidate_pdf_url
-
-try:
-    __version__ = version("mcp-server-kalshi")
-except PackageNotFoundError:  # pragma: no cover
-    __version__ = "0.0.0"
 
 
 def _background_info(env_label: str, is_production: bool) -> str:

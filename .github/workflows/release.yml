@@ -12,112 +12,114 @@ jobs:
     name: Build distributions
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: "3.12"
-          cache: "pip"
 
-      - name: Install build tooling & runtime dependencies
+      - name: Install build tooling
         run: |
           python -m pip install --upgrade pip
           pip install build twine cyclonedx-bom
-          pip install .
-
-      - name: Verify tag matches package version
-        run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          PKG=$(python -c "import tomllib,pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
-          if [ "$TAG" != "$PKG" ]; then
-            echo "Tag $TAG does not match pyproject version $PKG" >&2
-            exit 1
-          fi
-          echo "Tag and version agree: $PKG"
 
       - name: Build
         run: python -m build
+
+      - name: Verify wheel version matches tag
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          if [ "${#wheels[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one wheel in dist/, found ${#wheels[@]}"
+            exit 1
+          fi
+          WHEEL_VERSION="$(unzip -p "${wheels[0]}" '*.dist-info/METADATA' | sed -n 's/^Version: //p' | head -n 1)"
+          if [ "$WHEEL_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::wheel METADATA version '${WHEEL_VERSION}' does not match tag ${GITHUB_REF_NAME} (expected '${TAG_VERSION}')"
+            exit 1
+          fi
+          echo "Wheel version ${WHEEL_VERSION} matches tag ${GITHUB_REF_NAME}"
 
       - name: Twine check
         run: twine check dist/*
 
       - name: Generate CycloneDX SBOM
-        run: cyclonedx-py environment -o sbom.cdx.json
+        run: |
+          # Describe only what ships: a clean venv with the built wheel and its
+          # runtime dependencies (no pip, no build tooling from the runner).
+          python -m venv --without-pip "$RUNNER_TEMP/sbom-env"
+          python -m pip --python "$RUNNER_TEMP/sbom-env/bin/python" install dist/*.whl
+          cyclonedx-py environment "$RUNNER_TEMP/sbom-env" -o sbom.cdx.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: dist
           path: |
             dist/
             sbom.cdx.json
 
-  # fork-only: upstream owns PyPI/registry. This job must not publish.
   publish:
-    name: Publish to PyPI and MCP Registry (disabled)
-    if: false
+    name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
-    environment: pypi
     permissions:
-      id-token: write      # Trusted Publishing (OIDC) — no API token stored
+      id-token: write      # OIDC for build provenance
       attestations: write  # build provenance
-      contents: write      # attach assets to GitHub Release
+      contents: write      # create the GitHub Release and attach assets
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           persist-credentials: false
+          fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           name: dist
 
+      # Build the notes before anything publishes: a failure here must stop the
+      # release before anything ships (the GitHub Release and the GHCR image).
+      - name: Build release notes
+        run: python3 scripts/release_notes.py --to "$GITHUB_REF_NAME" > release-notes.md
+
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be  # v2.4.0
         with:
           subject-path: "dist/*"
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      # Fork-only: upstream (9crusher/mcp-server-kalshi) owns the public PyPI name
+      # mcp-server-kalshi, so this fork does not publish to PyPI. Do not uncomment
+      # this step unless the project moves to a PyPI name the fork owns.
+      # - name: Publish to PyPI
+      #   uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
 
-      - name: Attach SBOM to release
-        uses: softprops/action-gh-release@v2
+      - name: Create GitHub Release and attach assets
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
         with:
-          files: sbom.cdx.json
-
-      # Publish to MCP Registry
-      - name: Install and Verify mcp-publisher
-        run: |
-          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-          ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
-          ARCHIVE="mcp-publisher_${OS}_${ARCH}.tar.gz"
-          curl -L -s -o "$ARCHIVE" "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/$ARCHIVE"
-          curl -L -s -o checksums.txt "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/registry_1.8.1_checksums.txt"
-          sha256sum --ignore-missing --check checksums.txt
-          tar xz -f "$ARCHIVE" mcp-publisher
-          rm "$ARCHIVE" checksums.txt
-
-      - name: Authenticate to MCP Registry
-        run: ./mcp-publisher login github-oidc
-
-      - name: Set version in server.json
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.tmp && mv server.tmp server.json
-
-      - name: Publish server to MCP Registry
-        run: ./mcp-publisher publish
+          files: |
+            dist/*
+            sbom.cdx.json
+          body_path: release-notes.md
 
   docker:
     name: Publish Docker image
-    needs: build
+    # Ship nothing (GHCR `:latest` included) unless the publish job, which builds
+    # the release notes and creates the GitHub Release, succeeded.
+    needs: [build, publish]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -127,11 +129,57 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      # The Docker build context has no .git, so the tag version is passed in.
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6.19.2
         with:
           context: .
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository }}:latest
+          build-args: |
+            UV_DYNAMIC_VERSIONING_BYPASS=${{ steps.version.outputs.version }}
+
+  # MCP Registry publishing, disabled: this fork does not publish to the MCP
+  # Registry (upstream owns io.github.9crusher/mcp-server-kalshi). server.json
+  # lists one OCI package, the GHCR image, so publishing would need no PyPI
+  # release: it would run after the docker job pushes the image, which must be
+  # public and carry the io.modelcontextprotocol.server.name label (see
+  # Dockerfile). Uncomment the job below only if the maintainer decides to list
+  # the fork under io.github.christianclaudio/mcp-server-kalshi.
+  # registry:
+  #   name: Publish to MCP Registry
+  #   needs: [docker]
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: read
+  #     id-token: write  # mcp-publisher login github-oidc
+  #   steps:
+  #     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+  #       with:
+  #         persist-credentials: false
+  #
+  #     - name: Install and Verify mcp-publisher
+  #       run: |
+  #         OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+  #         ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+  #         ARCHIVE="mcp-publisher_${OS}_${ARCH}.tar.gz"
+  #         curl -L -s -o "$ARCHIVE" "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/$ARCHIVE"
+  #         curl -L -s -o checksums.txt "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/registry_1.8.1_checksums.txt"
+  #         sha256sum --ignore-missing --check checksums.txt
+  #         tar xz -f "$ARCHIVE" mcp-publisher
+  #         rm "$ARCHIVE" checksums.txt
+  #
+  #     - name: Authenticate to MCP Registry
+  #       run: ./mcp-publisher login github-oidc
+  #
+  #     # OCI packages carry their version only in the image tag inside `identifier`;
+  #     # the registry rejects a package-level `version` field.
+  #     - name: Set version in server.json
+  #       run: |
+  #         VERSION=${GITHUB_REF#refs/tags/v}
+  #         jq --arg v "$VERSION" '.version = $v | .packages[0].identifier |= sub(":[^:/]+$"; ":" + $v)' server.json > server.tmp && mv server.tmp server.json
+  #
+  #     - name: Publish server to MCP Registry
+  #       run: ./mcp-publisher publish

@@ -1357,7 +1357,6 @@ wheels = [
 
 [[package]]
 name = "mcp-server-kalshi"
-version = "0.2.9"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
