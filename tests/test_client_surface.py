@@ -93,7 +93,9 @@ def _example_for(schema: dict[str, Any]) -> Any:
 
 
 def _wire_value(argument: PromptArgument) -> str:
-    """Return a minimal MCP prompt argument string (prompt arguments are strings on the wire)."""
+    """Return a minimal MCP prompt argument string (prompt arguments are strings on the
+    wire).
+    """
     match = _SCHEMA_NOTE.search(argument.description or "")
     value = _example_for(json.loads(match.group(1))) if match else "example"
     return value if isinstance(value, str) else json.dumps(value)
@@ -106,7 +108,9 @@ def _has_content(item: TextResourceContents | BlobResourceContents) -> bool:
 
 
 def _schema_failures(tools: list[Tool]) -> list[str]:
-    """Collect every missing name, non-object schema and invalid JSON Schema in ``tools``."""
+    """Collect every missing name, non-object schema and invalid JSON Schema in
+    ``tools``.
+    """
     failures: list[str] = []
     for tool in tools:
         schema = tool.input_schema
@@ -137,7 +141,9 @@ def _schema_failures(tools: list[Tool]) -> list[str]:
 async def test_every_tool_lists_with_name_and_input_schema(
     surface_client: SurfaceClient,
 ) -> None:
-    """``tools/list`` returns at least one tool, each with a name and valid object schemas."""
+    """``tools/list`` returns at least one tool, each with a name and valid object
+    schemas.
+    """
     async with surface_client as client:
         tools = await client.list_tools()
     assert tools, "the server lists no tools"
@@ -178,7 +184,9 @@ async def test_every_resource_reads_through_the_client(
 async def test_every_prompt_renders_through_the_client(
     surface_client: SurfaceClient,
 ) -> None:
-    """Every prompt renders with its required arguments filled from the declared schema."""
+    """Every prompt renders with its required arguments filled from the declared
+    schema.
+    """
     failures: list[str] = []
     async with surface_client as client:
         for prompt in await client.list_prompts():
