@@ -1,5 +1,9 @@
 """Tests for credential scrubbing and KalshiAPIError sanitization."""
 
+from typing import Any
+from unittest.mock import patch
+
+from mcp_server_kalshi import server
 from mcp_server_kalshi.errors import KalshiAPIError, redact_secrets
 
 
@@ -50,3 +54,79 @@ def test_kalshi_api_error_sanitization():
         body={"error": "invalid parameter"},
     )
     assert "invalid parameter" in str(dict_err)
+
+
+def test_redact_secrets_token_forms():
+    """api/access/refresh tokens and a bare token= query parameter are redacted in every form."""
+    cases = {
+        "api_token=SECRET1": "api_token=[REDACTED]",
+        "api-token: SECRET1": "api-token: [REDACTED]",
+        "access_token: SECRET2": "access_token: [REDACTED]",
+        "refresh_token=SECRET4": "refresh_token=[REDACTED]",
+        '{"refresh_token": "SECRET4"}': '{"refresh_token": "[REDACTED]"}',
+        "{'access_token': 'SECRET2'}": "{'access_token': '[REDACTED]'}",
+        '{"m": "{\\"access_token\\": \\"SECRET5\\"}"}': (
+            '{"m": "{\\"access_token\\": \\"[REDACTED]\\"}"}'
+        ),
+        "GET https://api.example.com/x?token=SECRET3&page=2": (
+            "GET https://api.example.com/x?token=[REDACTED]&page=2"
+        ),
+        "url=/x?a=1&TOKEN=SECRET6": "url=/x?a=1&TOKEN=[REDACTED]",
+        "refresh_token=a.b-c_d/e+f==": "refresh_token=[REDACTED]",
+    }
+    for raw, expected in cases.items():
+        assert redact_secrets(raw) == expected, raw
+
+
+def test_redact_secrets_leaves_token_words_alone():
+    """Ordinary words and pagination fields that contain "token" are not redacted."""
+    for text in (
+        "tokenizer failed on input",
+        "next_page_token_count=5",
+        "page_token=abc123 is a pagination cursor",
+        "the token expired",
+        "max_tokens=1024",
+    ):
+        assert redact_secrets(text) == text, text
+
+
+_TOKEN_SECRETS = ("SECRET1", "SECRET2", "SECRET3", "SECRET4")
+
+
+def _token_error() -> KalshiAPIError:
+    """A 401 whose JSON body echoes the request URL and tokens (dict bodies are not pre-redacted)."""
+    return KalshiAPIError(
+        status_code=401,
+        method="GET",
+        path="/portfolio/balance",
+        body={
+            "error": "GET https://api.example.com/x?token=SECRET3 rejected: api_token=SECRET1",
+            "access_token": "SECRET2",
+            "detail": '{"refresh_token": "SECRET4"}',
+        },
+    )
+
+
+async def test_tool_error_path_redacts_token_forms():
+    """A tool failure carrying every token form reaches the client redacted (isError true)."""
+    tool = await server.mcp.get_tool("get_balance")
+    assert tool is not None
+
+    async def failing(_: dict[str, Any]) -> Any:
+        raise _token_error()
+
+    with patch.object(server.ToolRegistry, "get_handler", return_value=failing):
+        res = await tool.run({})
+        wire = await server._req_call_tool(
+            None, server.types.CallToolRequestParams(name="get_balance", arguments={})
+        )
+    for text in (res.content[0].text, wire.content[0].text):
+        assert text.startswith("Error in get_balance: Kalshi API 401")
+        assert "?token=[REDACTED]" in text
+        assert "api_token=[REDACTED]" in text
+        assert "'access_token': '[REDACTED]'" in text
+        assert '"refresh_token": "[REDACTED]"' in text
+        for secret in _TOKEN_SECRETS:
+            assert secret not in text
+    assert res.is_error is True
+    assert wire.is_error is True
