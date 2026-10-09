@@ -121,6 +121,11 @@ def test_redact_secrets_token_forms():
             id="url_encoded_access_token",
         ),
         pytest.param(
+            "cb=https%3A%2F%2Fh%2Fx%3Faccess_token%3DSECRET21%23frag",
+            "cb=https%3A%2F%2Fh%2Fx%3Faccess_token%3D[REDACTED]%23frag",
+            id="url_encoded_access_token_fragment",
+        ),
+        pytest.param(
             "q=api_token%3DS16%26refresh_token%3DS17%26auth_token%3DS18"
             "%26id_token%3DS19%26session_token%3DS20",
             "q=api_token%3D[REDACTED]%26refresh_token%3D[REDACTED]"
