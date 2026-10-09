@@ -3,6 +3,8 @@
 from typing import Any
 from unittest.mock import patch
 
+import pytest
+
 from mcp_server_kalshi import server
 from mcp_server_kalshi.errors import KalshiAPIError, redact_secrets
 
@@ -78,19 +80,91 @@ def test_redact_secrets_token_forms():
         assert redact_secrets(raw) == expected, raw
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        pytest.param("auth_token=SECRET7", "auth_token=[REDACTED]", id="auth_token"),
+        pytest.param(
+            '{"id_token": "SECRET8"}', '{"id_token": "[REDACTED]"}', id="id_token"
+        ),
+        pytest.param(
+            "session-token: SECRET9&x=1",
+            "session-token: [REDACTED]&x=1",
+            id="session_token",
+        ),
+        pytest.param(
+            "X-Auth-Token: SECRET10\nAccept: */*",
+            "X-Auth-Token: [REDACTED]\nAccept: */*",
+            id="x_auth_token_header",
+        ),
+        pytest.param(
+            "Authorization: Token SECRET11 rejected",
+            "Authorization: Token [REDACTED] rejected",
+            id="authorization_token",
+        ),
+        pytest.param(
+            "{'Authorization': 'Token SECRET12'}",
+            "{'Authorization': 'Token [REDACTED]'}",
+            id="authorization_token_dict",
+        ),
+        pytest.param(
+            '{"token": "SECRET13"}', '{"token": "[REDACTED]"}', id="json_token"
+        ),
+        pytest.param(
+            '{"m": "{\\"token\\": \\"SECRET14\\"}"}',
+            '{"m": "{\\"token\\": \\"[REDACTED]\\"}"}',
+            id="json_token_escaped",
+        ),
+        pytest.param(
+            "cb=https%3A%2F%2Fh%2Fx%3Faccess_token%3DSECRET15%26x%3D1%23frag",
+            "cb=https%3A%2F%2Fh%2Fx%3Faccess_token%3D[REDACTED]%26x%3D1%23frag",
+            id="url_encoded_access_token",
+        ),
+        pytest.param(
+            "q=api_token%3DS16%26refresh_token%3DS17%26auth_token%3DS18"
+            "%26id_token%3DS19%26session_token%3DS20",
+            "q=api_token%3D[REDACTED]%26refresh_token%3D[REDACTED]"
+            "%26auth_token%3D[REDACTED]%26id_token%3D[REDACTED]"
+            "%26session_token%3D[REDACTED]",
+            id="url_encoded_other_keys",
+        ),
+    ],
+)
+def test_redact_secrets_more_token_forms(raw: str, expected: str) -> None:
+    """auth/id/session tokens, X-Auth-Token, Authorization: Token, JSON "token" and %3D."""
+    assert redact_secrets(raw) == expected
+
+
 def test_redact_secrets_leaves_token_words_alone():
     """Ordinary words and pagination fields that contain "token" are not redacted."""
     for text in (
         "tokenizer failed on input",
         "next_page_token_count=5",
         "page_token=abc123 is a pagination cursor",
+        "next_token=abc123&x=1",
+        "csrf_token=abc123#frag",
+        "refresh_token_expires_in=3600",
         "the token expired",
         "max_tokens=1024",
+        '{"page_token": "x", "next_token": "x", "csrf_token": "x", "max_tokens": 5}',
+        "X-Auth-Token-Expires: 2026-10-09T00:00:00Z",
+        "session_token_ttl=3600",
+        "id_token_hint_count=2",
+        "Token x is invalid",
+        "Authorization failed: token expired",
     ):
         assert redact_secrets(text) == text, text
 
 
-_TOKEN_SECRETS = ("SECRET1", "SECRET2", "SECRET3", "SECRET4")
+_TOKEN_SECRETS = (
+    "SECRET1",
+    "SECRET2",
+    "SECRET3",
+    "SECRET4",
+    "SECRET10",
+    "SECRET11",
+    "SECRET15",
+)
 
 
 def _token_error() -> KalshiAPIError:
@@ -103,6 +177,8 @@ def _token_error() -> KalshiAPIError:
             "error": "GET https://api.example.com/x?token=SECRET3 rejected: api_token=SECRET1",
             "access_token": "SECRET2",
             "detail": '{"refresh_token": "SECRET4"}',
+            "headers": "X-Auth-Token: SECRET10 Authorization: Token SECRET11",
+            "callback": "https%3A%2F%2Fh%2Fcb%3Fsession_token%3DSECRET15%26x%3D1",
         },
     )
 
@@ -126,6 +202,8 @@ async def test_tool_error_path_redacts_token_forms():
         assert "api_token=[REDACTED]" in text
         assert "'access_token': '[REDACTED]'" in text
         assert '"refresh_token": "[REDACTED]"' in text
+        assert "X-Auth-Token: [REDACTED] Authorization: Token [REDACTED]" in text
+        assert "session_token%3D[REDACTED]%26x%3D1" in text
         for secret in _TOKEN_SECRETS:
             assert secret not in text
     assert res.is_error is True

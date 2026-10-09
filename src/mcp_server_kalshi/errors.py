@@ -12,18 +12,37 @@ RE_KALSHI_HEADERS = re.compile(
 RE_GENERIC_SECRETS = re.compile(
     r"(?i)(api[_-]?key|client[_-]?secret|password|private[_-]?key)[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9_\-\.+=/]{8,}[\"']?"
 )
-# api_token / access_token / refresh_token as key=value, key: value and JSON
-# ("key": "value", also backslash-escaped inside an already-serialized JSON string).
-RE_TOKEN_KEYS = re.compile(
-    r"(?i)((?:api|access|refresh)[_-]?token(?:\\?[\"'])?\s*[:=]\s*(?:\\?[\"'])?)"
-    r"[^\s\"'\\&,;]+",
-    re.IGNORECASE,
-)
-# Bare ``token=`` query parameter; the lookbehind keeps ``page_token=`` and
-# ``next_page_token_count`` untouched.
-RE_TOKEN_QUERY = re.compile(
-    r"(?i)((?<![A-Za-z0-9_])token=)[^\s\"'\\&#]+", re.IGNORECASE
-)
+# House standard token patterns, applied in this order with r"\1[REDACTED]".
+RE_TOKEN_PATTERNS = [
+    # api/access/refresh/auth/id/session tokens as key=value, key: value, an
+    # ``X-Auth-Token:`` header and JSON ("key": "value", also backslash-escaped inside an
+    # already-serialized JSON string).
+    re.compile(
+        r"(?i)((?:api|access|refresh|auth|id|session)[_-]?token(?:\\?[\"'])?\s*[:=]\s*"
+        r"(?:\\?[\"'])?)[^\s\"'\\&,;]+",
+        re.IGNORECASE,
+    ),
+    # The same keys URL-encoded (``access_token%3D...``); the value stops at an encoded
+    # ``%26`` (&) or ``%23`` (#), so the parameters after it survive.
+    re.compile(
+        r"(?i)((?:api|access|refresh|auth|id|session)[_-]?token%3D)"
+        r"(?:[^\s\"'\\&,;#%]|%(?!26|23))+",
+        re.IGNORECASE,
+    ),
+    # ``Authorization: Token <value>`` scheme, also as a quoted JSON or dict entry.
+    re.compile(
+        r"(?i)(authorization(?:\\?[\"'])?\s*[:=]\s*(?:\\?[\"'])?token\s+)[^\s\"'\\&,;]+",
+        re.IGNORECASE,
+    ),
+    # JSON ``"token": "value"``; the opening quote right before ``token`` keeps keys such
+    # as ``"next_token"`` and ``"page_token"`` untouched.
+    re.compile(
+        r"(?i)(\\?[\"']token\\?[\"']\s*:\s*\\?[\"'])[^\s\"'\\&,;]+", re.IGNORECASE
+    ),
+    # Bare ``token=`` query parameter; the lookbehind keeps ``page_token=``,
+    # ``next_token=`` and ``csrf_token=`` untouched.
+    re.compile(r"(?i)((?<![A-Za-z0-9_])token=)[^\s\"'\\&#]+", re.IGNORECASE),
+]
 
 
 def redact_secrets(text: str) -> str:
@@ -34,8 +53,8 @@ def redact_secrets(text: str) -> str:
     scrubbed = RE_BEARER_TOKEN.sub("Bearer [REDACTED]", scrubbed)
     scrubbed = RE_KALSHI_HEADERS.sub(r"\1: [REDACTED]", scrubbed)
     scrubbed = RE_GENERIC_SECRETS.sub(r"\1: [REDACTED]", scrubbed)
-    scrubbed = RE_TOKEN_KEYS.sub(r"\1[REDACTED]", scrubbed)
-    scrubbed = RE_TOKEN_QUERY.sub(r"\1[REDACTED]", scrubbed)
+    for pattern in RE_TOKEN_PATTERNS:
+        scrubbed = pattern.sub(r"\1[REDACTED]", scrubbed)
     return scrubbed
 
 
