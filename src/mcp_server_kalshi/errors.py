@@ -5,15 +5,21 @@ from typing import Any
 RE_RSA_KEY = re.compile(
     r"-----BEGIN (?:RSA )?PRIVATE KEY-----[\s\S]+?-----END (?:RSA )?PRIVATE KEY-----"
 )
-RE_BEARER_TOKEN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9_\-\.]+")
+RE_BEARER_TOKEN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9_\-\.~+/]+=*")
 RE_KALSHI_HEADERS = re.compile(
     r"(?i)(KALSHI-ACCESS-KEY|KALSHI-ACCESS-SIGNATURE)\s*[:=]\s*['\"]?[A-Za-z0-9_\-+/=]+['\"]?"
 )
 RE_GENERIC_SECRETS = re.compile(
     r"(?i)(api[_-]?key|client[_-]?secret|password|private[_-]?key)[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9_\-\.+=/]{8,}[\"']?"
 )
-# House standard token patterns, applied in this order with r"\1[REDACTED]".
+# House standard patterns 1-9, applied in this order with r"\1[REDACTED]".
 RE_TOKEN_PATTERNS = [
+    # Bearer value: base64url and base64 characters (``~``, ``+``, ``/``) plus ``=``
+    # padding.
+    re.compile(r"(?i)(bearer\s+)[a-z0-9_\-\.~+/]{8,}=*", re.IGNORECASE),
+    re.compile(r"(?i)(api[_-]?key[\"'\s:=]+)[a-z0-9_\-\.]{8,}", re.IGNORECASE),
+    re.compile(r"(?i)(client[_-]?secret[\"'\s:=]+)[a-z0-9_\-\.]{8,}", re.IGNORECASE),
+    re.compile(r"(?i)(password[\"'\s:=]+)[^\s\"',]{4,}", re.IGNORECASE),
     # api/access/refresh/auth/id/session tokens as key=value, key: value, an
     # ``X-Auth-Token:`` header and JSON ("key": "value", also backslash-escaped inside an
     # already-serialized JSON string).
@@ -39,9 +45,13 @@ RE_TOKEN_PATTERNS = [
     re.compile(
         r"(?i)(\\?[\"']token\\?[\"']\s*:\s*\\?[\"'])[^\s\"'\\&,;]+", re.IGNORECASE
     ),
-    # Bare ``token=`` query parameter; the lookbehind keeps ``page_token=``,
-    # ``next_token=`` and ``csrf_token=`` untouched.
-    re.compile(r"(?i)((?<![A-Za-z0-9_])token=)[^\s\"'\\&#]+", re.IGNORECASE),
+    # Bare ``token`` key with ``:`` or ``=``, optional spaces and an optional opening quote
+    # (``token=``, ``token: x``, ``token = x``, ``token: "x"``); the lookbehind keeps
+    # ``page_token``, ``next_token``, ``csrf_token`` and ``max_tokens`` untouched.
+    re.compile(
+        r"(?i)((?<![A-Za-z0-9_])token\s*[:=]\s*(?:\\?[\"'])?)[^\s\"'\\&#]+",
+        re.IGNORECASE,
+    ),
 ]
 
 

@@ -140,6 +140,40 @@ def test_redact_secrets_more_token_forms(raw: str, expected: str) -> None:
     assert redact_secrets(raw) == expected
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        pytest.param("token: SECRET22", "token: [REDACTED]", id="token_colon_space"),
+        pytest.param("token:SECRET23", "token:[REDACTED]", id="token_colon"),
+        pytest.param(
+            "token = SECRET24", "token = [REDACTED]", id="token_spaced_equals"
+        ),
+        pytest.param(
+            "Token: abcdefgh12345", "Token: [REDACTED]", id="token_capitalized"
+        ),
+        pytest.param(
+            'token: "SECRET25"', 'token: "[REDACTED]"', id="token_colon_double_quote"
+        ),
+        pytest.param(
+            "token='SECRET26'", "token='[REDACTED]'", id="token_equals_single_quote"
+        ),
+    ],
+)
+def test_redact_secrets_bare_token_colon_and_spaced(raw: str, expected: str) -> None:
+    """A bare token key takes ``:`` or ``=``, optional spaces and a quote; all are kept."""
+    assert redact_secrets(raw) == expected
+
+
+def test_redact_secrets_bearer_base64_tail() -> None:
+    """A bearer value with ``~``, ``/``, ``+`` and ``=`` padding is redacted with no tail left."""
+    assert redact_secrets("Bearer abc.def~ghi/jk+l==") == "Bearer [REDACTED]"
+
+
+def test_redact_secrets_token_query_stops_at_fragment() -> None:
+    """A bare ``token=`` query value stops at a literal ``#``, so the fragment survives."""
+    assert redact_secrets("/x?token=SECRET#frag") == "/x?token=[REDACTED]#frag"
+
+
 def test_redact_secrets_leaves_token_words_alone():
     """Ordinary words and pagination fields that contain "token" are not redacted."""
     for text in (
@@ -157,6 +191,11 @@ def test_redact_secrets_leaves_token_words_alone():
         "id_token_hint_count=2",
         "Token x is invalid",
         "Authorization failed: token expired",
+        "max_tokens: 5",
+        "next_token: abc",
+        "page_token: abc",
+        "X-Auth-Token-Expires: 5",
+        '{"token": null}',
     ):
         assert redact_secrets(text) == text, text
 
