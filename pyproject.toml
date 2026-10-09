@@ -19,6 +19,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "black>=26.5.1",
+    "jsonschema>=4.26.0",
     "ruff",
     "mypy",
     "pytest",

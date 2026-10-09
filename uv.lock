@@ -1372,6 +1372,7 @@ dependencies = [
 dev = [
     { name = "black" },
     { name = "build" },
+    { name = "jsonschema" },
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -1388,6 +1389,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=50.0.0" },
     { name = "fastmcp", specifier = ">=4.0.11" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.26.0" },
     { name = "mcp", specifier = ">=2.2.0" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "pre-commit", marker = "extra == 'dev'" },

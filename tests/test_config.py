@@ -69,7 +69,10 @@ def test_env_label():
     assert _settings(KALSHI_ENV="demo").env_label == "DEMO (sandbox)"
 
 
-def test_has_credentials_and_api_key_value():
+def test_has_credentials_and_api_key_value(monkeypatch):
+    monkeypatch.delenv("KALSHI_API_KEY", raising=False)
+    monkeypatch.delenv("KALSHI_API_KEY_ID", raising=False)
+    monkeypatch.delenv("KALSHI_PRIVATE_KEY_PATH", raising=False)
     none = _settings()
     assert none.has_credentials is False
     assert none.api_key_value() is None

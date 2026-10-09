@@ -59,6 +59,7 @@ When translating an API endpoint or Kalshi documentation into an MCP tool, follo
 - **Zero live network calls during tests.** Keep tests 100% offline.
 - Add the new tool to `EXPECTED_ANNOTATIONS` in `scripts/check_tool_contract.py` (the expected count comes from it), then run `uv run python scripts/check_tool_contract.py`.
 - Ensure test coverage remains at **100.0%**.
+- `tests/test_client_surface.py` is mandatory and must keep passing: it lists every tool and reads every resource and prompt through an in-memory `fastmcp.Client`. Protocol conformance is not a substitute, because the conformance suite runs its own fixtures and never sees this server's resources or prompts.
 
 ---
 

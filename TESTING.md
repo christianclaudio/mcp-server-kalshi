@@ -33,6 +33,7 @@ uv run pytest --cov=src/mcp_server_kalshi --cov-report=term-missing --cov-fail-u
 | [`tests/test_auth.py`](tests/test_auth.py) | RSA key loading, PSS SHA-256 header generation, signature verification. |
 | [`tests/test_base_client.py`](tests/test_base_client.py) | HTTP lifecycle, header injection, async context managers, error trapping. |
 | [`tests/test_client_endpoints.py`](tests/test_client_endpoints.py) | Wire tests for all 32 Kalshi API client methods against mock transports. |
+| [`tests/test_client_surface.py`](tests/test_client_surface.py) | Every tool, resource and prompt through an in-memory `fastmcp.Client`: at least one tool, valid object input and output schemas (all failures in one message), every resource read and every prompt rendered. |
 | [`tests/test_config.py`](tests/test_config.py) | Environment detection (`demo` vs `prod`), base URL derivation, caching. |
 | [`tests/test_errors.py`](tests/test_errors.py) | Credential scrubbing (`_redact_secrets`) for RSA keys and tokens. |
 | [`tests/test_handlers.py`](tests/test_handlers.py) | Tool registry completeness and handler dispatch. |
