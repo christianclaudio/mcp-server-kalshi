@@ -10,9 +10,9 @@ paths run on the wire types a host receives. The test runs offline because none 
 calls reach the vendor API; any repo whose tools need a network mock should supply it
 in its own ``conftest.py``.
 
-The server has no factory or profiles, so the fixture is a single ``Client(mcp)``, run once with ``KALSHI_READONLY`` off and once on. The
-checks are generic; a resource template or prompt added later needs at most an entry in
-one of the two tables below:
+The server has no factory or profiles, so the fixture is a single ``Client(mcp)``, run
+once with ``KALSHI_READONLY`` off and once on. The checks are generic; a resource
+template or prompt added later needs at most an entry in one of the two tables below:
 
 * ``RESOURCE_TEMPLATE_URIS`` -- one concrete URI per resource template, keyed by the
   client-visible ``uriTemplate``. A template without an entry fails the test, so a new
