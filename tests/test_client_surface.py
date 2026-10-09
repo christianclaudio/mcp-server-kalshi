@@ -10,7 +10,7 @@ paths run on the wire types a host receives. The test runs offline because none 
 calls reach the vendor API; any repo whose tools need a network mock should supply it
 in its own ``conftest.py``.
 
-The server has no factory or profiles, so the fixture is a single ``Client(mcp)``. The
+The server has no factory or profiles, so the fixture is a single ``Client(mcp)``, run once with ``KALSHI_READONLY`` off and once on. The
 checks are generic; a resource template or prompt added later needs at most an entry in
 one of the two tables below:
 
@@ -47,7 +47,7 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 from mcp.types import BlobResourceContents, PromptArgument, TextResourceContents, Tool
 
-from mcp_server_kalshi.server import mcp
+from mcp_server_kalshi.server import mcp, settings
 
 RESOURCE_TEMPLATE_URIS: dict[str, str] = {}
 PROMPT_ARGUMENTS: dict[str, dict[str, str]] = {}
@@ -68,9 +68,12 @@ _SCALAR_EXAMPLES: dict[str, Any] = {
 }
 
 
-@pytest.fixture
-def surface_client() -> SurfaceClient:
-    """An in-memory client on the production server instance."""
+@pytest.fixture(params=[False, True], ids=["default", "readonly"])
+def surface_client(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> SurfaceClient:
+    """An in-memory client on the production server, with KALSHI_READONLY off and on."""
+    monkeypatch.setattr(settings, "KALSHI_READONLY", request.param)
     return Client(mcp)
 
 
