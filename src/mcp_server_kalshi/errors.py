@@ -10,7 +10,7 @@ RE_KALSHI_HEADERS = re.compile(
     r"(?i)(KALSHI-ACCESS-KEY|KALSHI-ACCESS-SIGNATURE)\s*[:=]\s*['\"]?[A-Za-z0-9_\-+/=]+['\"]?"
 )
 RE_GENERIC_SECRETS = re.compile(
-    r"(?i)(api[_-]?key|client[_-]?secret|password|private[_-]?key)[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9_\-\.+=/]{8,}[\"']?"
+    r"(?i)((?:api[_-]?key|client[_-]?secret|password|private[_-]?key)[\"']?\s*[:=]\s*[\"']?)[A-Za-z0-9_\-\.+=/]{8,}"
 )
 # House standard patterns 1-9, applied in this order with r"\1[REDACTED]".
 RE_TOKEN_PATTERNS = [
@@ -62,7 +62,7 @@ def redact_secrets(text: str) -> str:
     scrubbed = RE_RSA_KEY.sub("[REDACTED RSA PRIVATE KEY]", text)
     scrubbed = RE_BEARER_TOKEN.sub("Bearer [REDACTED]", scrubbed)
     scrubbed = RE_KALSHI_HEADERS.sub(r"\1: [REDACTED]", scrubbed)
-    scrubbed = RE_GENERIC_SECRETS.sub(r"\1: [REDACTED]", scrubbed)
+    scrubbed = RE_GENERIC_SECRETS.sub(r"\1[REDACTED]", scrubbed)
     for pattern in RE_TOKEN_PATTERNS:
         scrubbed = pattern.sub(r"\1[REDACTED]", scrubbed)
     return scrubbed

@@ -174,6 +174,71 @@ def test_redact_secrets_token_query_stops_at_fragment() -> None:
     assert redact_secrets("/x?token=SECRET#frag") == "/x?token=[REDACTED]#frag"
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        pytest.param(
+            '{"password": "fakepw99"}',
+            '{"password": "[REDACTED]"}',
+            id="json_password",
+        ),
+        pytest.param(
+            '{"api_key": "FAKEKEY12345"}',
+            '{"api_key": "[REDACTED]"}',
+            id="json_api_key",
+        ),
+        pytest.param(
+            '{"client_secret": "FAKESEC12345"}',
+            '{"client_secret": "[REDACTED]"}',
+            id="json_client_secret",
+        ),
+        pytest.param(
+            '{"private_key": "FAKEPRIVKEY123"}',
+            '{"private_key": "[REDACTED]"}',
+            id="json_private_key",
+        ),
+    ],
+)
+def test_redact_secrets_generic_keeps_json_key(raw: str, expected: str) -> None:
+    """The generic secret pattern keeps the key, its quotes and the closing brace."""
+    assert redact_secrets(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected", "secret"),
+    [
+        pytest.param(
+            "password=pw12", "password=[REDACTED]", "pw12", id="house4_password_short"
+        ),
+        pytest.param(
+            'password: "Fake!pw#9"',
+            'password: "[REDACTED]"',
+            "Fake!pw#9",
+            id="house4_password_quoted",
+        ),
+        pytest.param(
+            "api_key FAKEKEY12345",
+            "api_key [REDACTED]",
+            "FAKEKEY12345",
+            id="house2_api_key_space",
+        ),
+        pytest.param(
+            "client_secret FAKESEC12345",
+            "client_secret [REDACTED]",
+            "FAKESEC12345",
+            id="house3_client_secret_space",
+        ),
+    ],
+)
+def test_redact_secrets_house_key_patterns(
+    raw: str, expected: str, secret: str
+) -> None:
+    """House patterns 2-4 redact forms the generic secret pattern does not reach."""
+    scrubbed = redact_secrets(raw)
+    assert scrubbed == expected
+    assert secret not in scrubbed
+
+
 def test_redact_secrets_leaves_token_words_alone():
     """Ordinary words and pagination fields that contain "token" are not redacted."""
     for text in (
