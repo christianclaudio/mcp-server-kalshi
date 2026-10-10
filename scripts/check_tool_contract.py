@@ -175,6 +175,12 @@ EXPECTED_ANNOTATIONS: dict[str, dict[str, Any]] = {
         "idempotent": True,
         "openWorld": False,
     },
+    "get_total_resting_order_value": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
     "get_tags_by_categories": {
         "readOnly": True,
         "destructive": False,

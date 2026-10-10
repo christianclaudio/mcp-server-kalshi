@@ -29,7 +29,7 @@ from mcp_server_kalshi.auth import (
     read_auth_token,
 )
 from mcp_server_kalshi.config import get_settings
-from mcp_server_kalshi.errors import redact_message
+from mcp_server_kalshi.errors import KalshiAPIError, redact_message
 from mcp_server_kalshi.kalshi_client import KalshiAPIClient
 from mcp_server_kalshi.kalshi_client.client import (
     build_amend_order_payload,
@@ -65,6 +65,7 @@ from mcp_server_kalshi.kalshi_client.schemas import (
     GetSettlementsRequest,
     GetSportsFiltersRequest,
     GetTagsByCategoriesRequest,
+    GetTotalRestingOrderValueRequest,
     ListEventsRequest,
     ListMarketsRequest,
     ListMultivariateCollectionsRequest,
@@ -1046,6 +1047,37 @@ async def handle_batch_cancel_orders(request: dict[str, Any]) -> Any:
         "count": len(req.order_ids),
         "result": result,
     }
+
+
+FCM_ONLY_403_MESSAGE = (
+    "Kalshi API 403 permission_denied: get_total_resting_order_value calls an "
+    'FCM-only endpoint. Kalshi: "This endpoint is only intended for use by FCM '
+    'members (rare)." Regular member accounts cannot use it; use '
+    "list_orders(status='resting') to review resting orders."
+)
+
+
+@ToolRegistry.register_tool(
+    name="get_total_resting_order_value",
+    description=(
+        "FCM members only. Get the total value, in cents, of resting orders "
+        '(GET /portfolio/summary/total_resting_order_value). Kalshi: "This endpoint '
+        'is only intended for use by FCM members (rare)." Regular member accounts '
+        "get 403 permission_denied; use list_orders(status='resting') instead."
+    ),
+    input_schema=GetTotalRestingOrderValueRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_total_resting_order_value(request: dict[str, Any]) -> Any:
+    try:
+        return await kalshi_client.get_total_resting_order_value()
+    except KalshiAPIError as exc:
+        if exc.status_code != 403:
+            raise
+    raise PermissionError(FCM_ONLY_403_MESSAGE) from None
 
 
 @ToolRegistry.register_tool(
