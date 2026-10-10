@@ -337,7 +337,12 @@ def tool_failure(error_type: str, message: str, **details: Any) -> ToolError:
 
 
 class KalshiAPIError(Exception):
-    """Raised when the Kalshi API returns a non-2xx response, carrying the sanitized error body."""
+    """Raised when the Kalshi API returns a non-2xx response, carrying the sanitized error body.
+
+    The message goes through ``redact_message``: a JSON body (a dict or list, or a string
+    holding JSON) is redacted value by value and keeps its shape. ``body`` holds the redacted
+    body (``redact_payload`` for structured bodies, ``redact_message`` for text).
+    """
 
     def __init__(
         self,
@@ -349,8 +354,12 @@ class KalshiAPIError(Exception):
         self.status_code = status_code
         self.method = method
         self.path = path
-        self.body = body
-        sanitized_body = redact_secrets(str(body)) if isinstance(body, str) else body
+        if isinstance(body, str):
+            self.body: Any = redact_message(body)
+            text = body
+        else:
+            self.body = redact_payload(body)
+            text = json.dumps(body, default=str)
         super().__init__(
-            f"Kalshi API {status_code} on {method} {path}: {sanitized_body}"
+            redact_message(f"Kalshi API {status_code} on {method} {path}: {text}")
         )

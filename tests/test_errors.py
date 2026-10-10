@@ -1,5 +1,6 @@
 """Tests for credential scrubbing and KalshiAPIError sanitization."""
 
+import json
 from typing import Any
 from unittest.mock import patch
 
@@ -278,7 +279,7 @@ _TOKEN_SECRETS = (
 
 
 def _token_error() -> KalshiAPIError:
-    """A 401 whose JSON body echoes the request URL and tokens (dict bodies are not pre-redacted)."""
+    """A 401 whose JSON body echoes the request URL and tokens."""
     return KalshiAPIError(
         status_code=401,
         method="GET",
@@ -310,11 +311,41 @@ async def test_tool_error_path_redacts_token_forms():
         assert text.startswith("Error in get_balance: Kalshi API 401")
         assert "?token=[REDACTED]" in text
         assert "api_token=[REDACTED]" in text
-        assert "'access_token': '[REDACTED]'" in text
-        assert '"refresh_token": "[REDACTED]"' in text
+        assert '"access_token": "[REDACTED]"' in text
+        assert '\\"refresh_token\\": \\"[REDACTED]\\"' in text
         assert "X-Auth-Token: [REDACTED] Authorization: Token [REDACTED]" in text
         assert "session_token%3D[REDACTED]%26x%3D1" in text
         for secret in _TOKEN_SECRETS:
             assert secret not in text
     assert res.is_error is True
     assert wire.is_error is True
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"error": "bad", "api_key": 7, "password": ["a"], "private_key": {"k": "v"}},
+        '{"error": "bad", "api_key": 7, "password": ["a"], "private_key": {"k": "v"}}',
+    ],
+    ids=["dict_body", "json_text_body"],
+)
+def test_kalshi_api_error_keeps_json_shape(body: Any) -> None:
+    """The message goes through ``redact_message``: the JSON body still parses, value by value."""
+    err = KalshiAPIError(401, "GET", "/portfolio/balance", body)
+    prefix = "Kalshi API 401 on GET /portfolio/balance: "
+    assert str(err).startswith(prefix)
+    parsed = json.loads(str(err).removeprefix(prefix))
+    assert parsed == {
+        "error": "bad",
+        "api_key": "[REDACTED]",
+        "password": "[REDACTED]",
+        "private_key": "[REDACTED]",
+    }
+    stored = err.body if isinstance(err.body, dict) else json.loads(err.body)
+    assert stored == parsed
+
+
+def test_kalshi_api_error_text_body_is_redacted_at_construction() -> None:
+    err = KalshiAPIError(500, "POST", "/x", "upstream password=hunter2 boom")
+    assert err.body == "upstream password=[REDACTED]"
+    assert str(err) == "Kalshi API 500 on POST /x: upstream password=[REDACTED]"
