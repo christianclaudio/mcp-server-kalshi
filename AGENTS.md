@@ -81,6 +81,7 @@ When translating an API endpoint or Kalshi documentation into an MCP tool, follo
    - Market discovery, legal rules, and candidate search work without credentials. Portfolio/order endpoints call `self._require_auth()` and fail-closed when keys are absent.
 6. **Secret Redaction**:
    - Credentials, private keys, and session tokens must never appear in logs or error traces.
+   - `errors.py` follows the template v1.6.0 house rules: a credential value is masked whole (quoted to its closing quote, unquoted to the end of the line, `{...}`/`[...]` to its balanced bracket), and any non-None value under a credential key is masked whatever its type. Every tool error path (`KalshiFastMCPTool.run` for FastMCP/HTTP and `handle_call_tool` for stdio) returns `isError: true` with `redact_message(str(exc))`, which redacts JSON inside the message value by value so it keeps its shape. Kalshi extras (signing headers, any-length `Bearer`, PEM blocks in any case or with no `-----END`) stay on top and fail closed.
 7. **Registry Metadata Constraint**:
    - In `server.json`, the root `description` must be **strictly $\le$ 100 characters** to pass MCP Registry validation (longer strings trigger HTTP 422).
 8. **Git Safety & Releases**:

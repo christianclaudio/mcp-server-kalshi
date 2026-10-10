@@ -29,7 +29,7 @@ from .auth import (
     read_auth_token,
 )
 from .config import get_settings
-from .errors import redact_secrets
+from .errors import redact_message
 from .kalshi_client import KalshiAPIClient
 from .kalshi_client.client import (
     build_amend_order_payload,
@@ -315,7 +315,7 @@ class KalshiFastMCPTool(Tool):
                 is_error=is_error,
             )
         except Exception as exc:
-            sanitized = redact_secrets(str(exc))
+            sanitized = redact_message(str(exc))
             return ToolResult(
                 content=[
                     types.TextContent(
@@ -1213,7 +1213,7 @@ async def handle_call_tool(
         handler = ToolRegistry.get_handler(name)
         return await handler(arguments or {})
     except Exception as exc:
-        sanitized = redact_secrets(str(exc))
+        sanitized = redact_message(str(exc))
         return [types.TextContent(type="text", text=f"Error in {name}: {sanitized}")]
 
 

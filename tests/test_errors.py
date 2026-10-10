@@ -11,7 +11,7 @@ from mcp_server_kalshi.errors import KalshiAPIError, redact_secrets
 
 def test_redact_secrets_empty_or_none():
     assert redact_secrets("") == ""
-    assert redact_secrets(None) is None  # type: ignore[arg-type]
+    assert redact_secrets(None) == ""  # type: ignore[arg-type]
 
 
 def test_redact_secrets_scrubs_keys_and_tokens():
@@ -23,7 +23,8 @@ def test_redact_secrets_scrubs_keys_and_tokens():
     )
     scrubbed = redact_secrets(text_with_rsa)
     assert "-----BEGIN RSA PRIVATE KEY-----" not in scrubbed
-    assert "[REDACTED RSA PRIVATE KEY]" in scrubbed
+    assert "MIIEowIBAAKCAQEA0Y8" not in scrubbed
+    assert scrubbed == "Error in request: [REDACTED]\nfailed."
 
     text_with_bearer = "Authorization: Bearer my_secret_token_12345"
     assert "my_secret_token" not in redact_secrets(text_with_bearer)

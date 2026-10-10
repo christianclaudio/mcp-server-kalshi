@@ -34,7 +34,10 @@ uv run pytest --cov=src/mcp_server_kalshi --cov-report=term-missing --cov-fail-u
 | [`tests/test_base_client.py`](tests/test_base_client.py) | HTTP lifecycle, header injection, async context managers, error trapping. |
 | [`tests/test_client_endpoints.py`](tests/test_client_endpoints.py) | Wire tests for all 32 Kalshi API client methods against mock transports. |
 | [`tests/test_config.py`](tests/test_config.py) | Environment detection (`demo` vs `prod`), base URL derivation, caching. |
-| [`tests/test_errors.py`](tests/test_errors.py) | Credential scrubbing (`_redact_secrets`) for RSA keys and tokens. |
+| [`tests/test_errors.py`](tests/test_errors.py) | Credential scrubbing (`redact_secrets`) for RSA keys and tokens, and `KalshiAPIError`. |
+| [`tests/test_redaction_house.py`](tests/test_redaction_house.py) | Template v1.6.0 house redaction rules (whole-value masking), ported with the template's tests. |
+| [`tests/test_redaction_probes.py`](tests/test_redaction_probes.py) | Kalshi redaction extras, timing probes, and real `tools/call` error paths with a number, list and dict under credential keys. |
+| [`tests/test_http_auth.py`](tests/test_http_auth.py) | `KALSHI_MCP_AUTH_TOKEN` bearer auth on every HTTP entry point and the non-localhost bind policy. |
 | [`tests/test_handlers.py`](tests/test_handlers.py) | Tool registry completeness and handler dispatch. |
 | [`tests/test_orders.py`](tests/test_orders.py) | Kalshi V2 YES-leg order pricing translation (cents $\to$ book ask/bid). |
 | [`tests/test_pdf.py`](tests/test_pdf.py) | Rules PDF downloading, fallback parsing, text extraction. |
