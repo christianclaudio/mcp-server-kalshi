@@ -119,7 +119,7 @@ def test_stdio_jsonrpc_protocol_flow() -> None:
         list_resp = client.await_response(2)
         assert "result" in list_resp
         tools = list_resp["result"].get("tools", [])
-        assert len(tools) == 36, f"Expected 36 tools, got {len(tools)}"
+        assert len(tools) == 35, f"Expected 35 tools, got {len(tools)}"
 
         # 4. Wire Tool Call
         client.send(
@@ -190,7 +190,7 @@ async def test_stateless_streamable_http_standalone_post() -> None:
             list_data = res_list.json()
             assert "result" in list_data
             assert "tools" in list_data["result"]
-            assert len(list_data["result"]["tools"]) == 36
+            assert len(list_data["result"]["tools"]) == 35
 
             # Standalone tool call without session affinity
             tool_payload = {
@@ -220,7 +220,7 @@ async def test_fastmcp_in_memory_client() -> None:
 
     async with Client(mcp) as client:
         tools = await client.list_tools()
-        assert len(tools) == 36
+        assert len(tools) == 35
         tool_names = {t.name for t in tools}
         assert "get_environment" in tool_names
         assert "list_markets" in tool_names

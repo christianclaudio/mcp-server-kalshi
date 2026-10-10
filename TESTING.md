@@ -49,7 +49,7 @@ uv run pytest --cov=src/mcp_server_kalshi --cov-report=term-missing --cov-fail-u
 ## 🛡️ Verification Scripts
 
 ```bash
-# Verify all 36 MCP tool contracts and MCP 2.0 annotations
+# Verify all 35 MCP tool contracts and MCP 2.0 annotations
 uv run python scripts/check_tool_contract.py
 
 # Verify parity against live Kalshi OpenAPI documentation

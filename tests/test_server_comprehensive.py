@@ -287,49 +287,45 @@ async def test_all_24_handlers_execute_successfully(
     assert out["count"] == 2
     assert fake.called("batch_cancel_orders")
 
-    # 27. get_portfolio_summary
-    out = handler_result(await server.handle_get_portfolio_summary({}))
-    assert out == {"ok": True}
-
-    # 28. get_tags_by_categories
+    # 27. get_tags_by_categories
     out = handler_result(await server.handle_get_tags_by_categories({}))
     assert out == {"ok": True}
 
-    # 29. get_sports_filters
+    # 28. get_sports_filters
     out = handler_result(await server.handle_get_sports_filters({}))
     assert out == {"ok": True}
 
-    # 30. get_milestones
+    # 29. get_milestones
     out = handler_result(await server.handle_get_milestones({"limit": 5}))
     assert out == {"ok": True}
 
-    # 31. get_milestone
+    # 30. get_milestone
     out = handler_result(await server.handle_get_milestone({"milestone_id": "m-1"}))
     assert out == {"ok": True}
 
-    # 32. get_event_live_data
+    # 31. get_event_live_data
     out = handler_result(
         await server.handle_get_event_live_data({"event_ticker": "EV-1"})
     )
     assert out == {"ok": True}
 
-    # 33. list_multivariate_collections
+    # 32. list_multivariate_collections
     out = handler_result(
         await server.handle_list_multivariate_collections({"limit": 5})
     )
     assert out == {"ok": True}
 
-    # 34. get_multivariate_collection
+    # 33. get_multivariate_collection
     out = handler_result(
         await server.handle_get_multivariate_collection({"collection_ticker": "COL-1"})
     )
     assert out == {"ok": True}
 
-    # 35. list_order_groups
+    # 34. list_order_groups
     out = handler_result(await server.handle_list_order_groups({"limit": 5}))
     assert out == {"ok": True}
 
-    # 36. cancel_order_group (preview vs confirmed)
+    # 35. cancel_order_group (preview vs confirmed)
     preview_group = handler_result(
         await server.handle_cancel_order_group({"order_group_id": "grp-1"})
     )
@@ -398,7 +394,7 @@ def test_readonly_mode_filtering(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "batch_create_orders" not in tool_names
     assert "batch_cancel_orders" not in tool_names
     assert "cancel_order_group" not in tool_names
-    assert len(tools) == 29
+    assert len(tools) == 28
 
     # Handler lookup for read-only tool in readonly mode succeeds
     handler = server.ToolRegistry.get_handler("list_markets")
@@ -666,7 +662,7 @@ async def test_fastmcp_version_and_tools(monkeypatch: pytest.MonkeyPatch) -> Non
 
     monkeypatch.setattr(server.settings, "KALSHI_READONLY", True)
     ro_tools = await server.mcp.list_tools()
-    assert len(ro_tools) == 29
+    assert len(ro_tools) == 28
 
     server.mcp.add_request_handler(
         "test/ping", server.types.PaginatedRequestParams, AsyncMock()
