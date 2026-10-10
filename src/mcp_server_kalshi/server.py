@@ -19,8 +19,8 @@ from fastmcp.tools.function_tool import FunctionTool
 from mcp.server.lowlevel import NotificationOptions
 from mcp.server.models import InitializationOptions
 
-from . import __version__
-from .auth import (
+from mcp_server_kalshi import __version__
+from mcp_server_kalshi.auth import (
     ALLOW_UNAUTHENTICATED_BIND_ENV,
     AUTH_TOKEN_ENV,
     SharedTokenVerifier,
@@ -28,17 +28,17 @@ from .auth import (
     is_localhost,
     read_auth_token,
 )
-from .config import get_settings
-from .errors import redact_message
-from .kalshi_client import KalshiAPIClient
-from .kalshi_client.client import (
+from mcp_server_kalshi.config import get_settings
+from mcp_server_kalshi.errors import redact_message
+from mcp_server_kalshi.kalshi_client import KalshiAPIClient
+from mcp_server_kalshi.kalshi_client.client import (
     build_amend_order_payload,
     build_create_order_payload,
     build_decrease_order_payload,
     series_ticker_from_market,
 )
-from .kalshi_client.pdf import fetch_pdf_text
-from .kalshi_client.schemas import (
+from mcp_server_kalshi.kalshi_client.pdf import fetch_pdf_text
+from mcp_server_kalshi.kalshi_client.schemas import (
     AmendOrderRequest,
     BatchCancelOrdersRequest,
     BatchCreateOrdersRequest,
@@ -74,7 +74,7 @@ from .kalshi_client.schemas import (
     ListSeriesRequest,
     MCPSchemaBaseModel,
 )
-from .ssrf import avalidate_pdf_url
+from mcp_server_kalshi.ssrf import avalidate_pdf_url
 
 
 def _background_info(env_label: str, is_production: bool) -> str:

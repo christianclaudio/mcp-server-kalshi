@@ -449,3 +449,81 @@ def test_fastmcp_run_entry_point_enforces_env_token() -> None:
         cwd=str(ROOT),
     )
     assert out.stdout.split()[-2:] == ["401", "200"]
+
+
+import socket  # noqa: E402
+
+# conftest patches ``socket.getaddrinfo`` (via ``mcp_server_kalshi.ssrf.socket``) to a public
+# address for every test; the real resolver is kept here so the live probe reaches 127.0.0.1.
+_REAL_GETADDRINFO = socket.getaddrinfo
+
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+
+
+def _serve_and_probe(
+    monkeypatch: pytest.MonkeyPatch, target: list[str]
+) -> tuple[int, int]:
+    """Start ``fastmcp run <target>`` over HTTP and POST initialize without/with the token."""
+    import time
+
+    monkeypatch.setattr(socket, "getaddrinfo", _REAL_GETADDRINFO)
+    port = _free_port()
+    fastmcp_bin = str(Path(sys.executable).parent / "fastmcp")
+    cmd = [fastmcp_bin, "run", *target, "--transport", "http"]
+    cmd += ["--host", "127.0.0.1", "--port", str(port)]
+    proc = subprocess.Popen(
+        cmd,
+        cwd=ROOT,
+        env=_clean_env(**{AUTH_TOKEN_ENV: TOKEN}),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    url = f"http://127.0.0.1:{port}/mcp"
+    try:
+        deadline = time.monotonic() + 30
+        while True:
+            assert proc.poll() is None, (
+                proc.stderr.read().decode() if proc.stderr else ""
+            )
+            try:
+                bare = httpx.post(url, json=INITIALIZE, headers=HEADERS, timeout=2)
+                break
+            except httpx.TransportError:
+                assert time.monotonic() < deadline, "fastmcp run did not start in 30s"
+                time.sleep(0.2)
+        auth = {**HEADERS, "Authorization": f"Bearer {TOKEN}"}
+        ok = httpx.post(url, json=INITIALIZE, headers=auth, timeout=5)
+        assert TOKEN not in bare.text + ok.text
+        return bare.status_code, ok.status_code
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:  # pragma: no cover - defensive
+            proc.kill()
+            proc.wait()
+
+
+def test_fastmcp_run_file_entry_point_starts_and_enforces_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The documented ``fastmcp run src/mcp_server_kalshi/server.py:mcp`` really starts."""
+    assert _serve_and_probe(monkeypatch, ["src/mcp_server_kalshi/server.py:mcp"]) == (
+        401,
+        200,
+    )
+
+
+def test_fastmcp_json_resolves_and_enforces_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``fastmcp.json`` points at a real file and object, and ``fastmcp run`` serves it."""
+    cfg = json.loads((ROOT / "fastmcp.json").read_text(encoding="utf-8"))
+    assert (ROOT / cfg["source"]["path"]).is_file()
+    assert cfg["source"]["entrypoint"] == "mcp"
+    target = ["fastmcp.json", "--skip-env"]
+    assert _serve_and_probe(monkeypatch, target) == (401, 200)
