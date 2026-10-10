@@ -11,6 +11,72 @@ import pytest
 from mcp_server_kalshi.config import get_settings
 from mcp_server_kalshi.server import ToolRegistry, handle_call_tool
 
+ACTIVE_MARKET_STATUSES = frozenset({"open", "active"})
+MULTIVARIATE_TICKER_PREFIX = "KXMVE"
+
+
+def is_usable_sample_market(market: dict[str, Any]) -> bool:
+    """Return True for an open, single (non-multivariate) market with a ticker."""
+    ticker = market.get("ticker")
+    if not isinstance(ticker, str) or not ticker:
+        return False
+    if market.get("status") not in ACTIVE_MARKET_STATUSES:
+        return False
+    if ticker.startswith(MULTIVARIATE_TICKER_PREFIX):
+        return False
+    if market.get("mve_collection_ticker") or market.get("mve_selected_legs"):
+        return False
+    return True
+
+
+def pick_sample_market(markets: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the first usable sample market, or None when there is none."""
+    for market in markets:
+        if is_usable_sample_market(market):
+            return market
+    return None
+
+
+def require_sample_market(markets: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return the first usable sample market, or skip the test with a reason."""
+    market = pick_sample_market(markets)
+    if market is None:
+        pytest.skip(
+            "No open, non-multivariate Kalshi market found to use as the e2e sample"
+        )
+    return market
+
+
+def test_pick_sample_market_skips_multivariate_and_closed() -> None:
+    markets: list[dict[str, Any]] = [
+        {"ticker": "KXMVECROSSCATEGORY-S1-A", "status": "active"},
+        {"ticker": "KXFOO-1", "status": "active", "mve_collection_ticker": "KXC"},
+        {"ticker": "KXBAR-1", "status": "active", "mve_selected_legs": [{"x": 1}]},
+        {"ticker": "KXCLOSED-1", "status": "closed"},
+        {"ticker": "KXSETTLED-1", "status": "settled"},
+        {"status": "active"},
+        {"ticker": "KXGOOD-1", "status": "active", "event_ticker": "KXGOOD"},
+        {"ticker": "KXGOOD-2", "status": "open"},
+    ]
+    assert pick_sample_market(markets) == markets[6]
+    assert pick_sample_market([{"ticker": "KXOPEN-1", "status": "open"}]) == {
+        "ticker": "KXOPEN-1",
+        "status": "open",
+    }
+
+
+def test_require_sample_market_skips_when_none_usable() -> None:
+    assert pick_sample_market([]) is None
+    with pytest.raises(pytest.skip.Exception, match="non-multivariate"):
+        require_sample_market(
+            [
+                {"ticker": "KXMVEX-1", "status": "active"},
+                {"ticker": "KXDONE-1", "status": "finalized"},
+            ]
+        )
+    good = {"ticker": "KXGOOD-1", "status": "active"}
+    assert require_sample_market([good]) is good
+
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
@@ -26,15 +92,22 @@ async def test_all_discovered_kalshi_tools_live() -> None:
     sample_milestone = "KXTEST"
     sample_collection = "KXTEST"
 
+    # The first page of list_markets is mostly multivariate (KXMVE...) markets,
+    # which can 404 on per-market endpoints, so walk open events instead.
+    candidates: list[dict[str, Any]] = []
     try:
-        m_res = await handle_call_tool("list_markets", {"limit": 1})
-        m_data = json.loads(m_res[0].text)
-        markets = m_data.get("markets", [])
-        if markets:
-            sample_ticker = markets[0].get("ticker", sample_ticker)
-            sample_event = markets[0].get("event_ticker", sample_event)
+        e_res = await handle_call_tool(
+            "list_events",
+            {"status": "open", "with_nested_markets": True, "limit": 100},
+        )
+        e_data = json.loads(e_res[0].text)
+        for event in e_data.get("events", []):
+            candidates.extend(event.get("markets") or [])
     except Exception:
         pass
+    market = require_sample_market(candidates)
+    sample_ticker = market["ticker"]
+    sample_event = market.get("event_ticker") or sample_event
 
     try:
         s_res = await handle_call_tool("list_series", {})
