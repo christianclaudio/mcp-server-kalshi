@@ -20,6 +20,14 @@ from mcp.server.lowlevel import NotificationOptions
 from mcp.server.models import InitializationOptions
 
 from . import __version__
+from .auth import (
+    ALLOW_UNAUTHENTICATED_BIND_ENV,
+    AUTH_TOKEN_ENV,
+    SharedTokenVerifier,
+    allow_unauthenticated_bind,
+    is_localhost,
+    read_auth_token,
+)
 from .config import get_settings
 from .errors import redact_secrets
 from .kalshi_client import KalshiAPIClient
@@ -209,8 +217,14 @@ class KalshiFastMCP(FastMCP):
         )
 
 
+# Bearer auth on every HTTP entry point (``mcp-server-kalshi``, ``fastmcp run``,
+# ``http_app()``/``streamable_http_app()``): FastMCP servers default to ``auth=None``, so
+# the verifier is attached at build whenever the stripped token env is non-blank. The
+# localhost bind refusal stays in ``main()``, the only entry point that knows the bind host.
+_auth_token = read_auth_token()
 mcp = KalshiFastMCP(
     "kalshi-server",
+    auth=SharedTokenVerifier(_auth_token) if _auth_token else None,
     version=__version__,
     lifespan=server_lifespan,
     instructions=KALSHI_BACKGROUND_INFO,
@@ -1283,6 +1297,44 @@ def _handle_shutdown(signum: int, frame: Any) -> None:
     sys.exit(0)
 
 
+def _apply_http_auth(
+    parser: argparse.ArgumentParser, transport: str, host: str
+) -> None:
+    """Make sure bearer auth from the token env is on, or enforce the localhost-only bind policy.
+
+    The module already attaches the verifier when the token env is set at import; this
+    attaches it at serve time if no verifier exists yet. A token that is empty after
+    ``.strip()`` counts as unset. With no token, a bind to any host other than 127.0.0.1,
+    ::1 or localhost exits through ``parser.error`` (code 2) unless
+    ``KALSHI_MCP_ALLOW_UNAUTHENTICATED_BIND`` opts in. Messages never include the token.
+    """
+    log = logging.getLogger(__name__)
+    auth_token = read_auth_token()
+    if auth_token:
+        if not isinstance(mcp.auth, SharedTokenVerifier):
+            mcp.auth = SharedTokenVerifier(auth_token)
+        log.info("Bearer token authentication is on for the %s transport", transport)
+        return
+    if not is_localhost(host):
+        if not allow_unauthenticated_bind():
+            parser.error(
+                f"refusing to serve {transport} on non-localhost host {host!r} without "
+                f"authentication: set {AUTH_TOKEN_ENV}, bind to 127.0.0.1, ::1 or localhost, "
+                f"or set {ALLOW_UNAUTHENTICATED_BIND_ENV}=1 to accept an unauthenticated bind"
+            )
+        log.warning(
+            "%s is set: serving %s on non-localhost host %r without authentication.",
+            ALLOW_UNAUTHENTICATED_BIND_ENV,
+            transport,
+            host,
+        )
+    log.warning(
+        "%s is not set, so MCP requests on the %s transport are not authenticated.",
+        AUTH_TOKEN_ENV,
+        transport,
+    )
+
+
 def main() -> None:
     signal.signal(signal.SIGTERM, _handle_shutdown)
     signal.signal(signal.SIGINT, _handle_shutdown)
@@ -1351,6 +1403,7 @@ def main() -> None:
             parser.error(
                 "Wildcard '*' is not permitted in --allowed-host; specify explicit hostnames."
             )
+        _apply_http_auth(parser, args.transport, args.host)
         http_kwargs: dict[str, Any] = {
             "host": args.host,
             "port": args.port,

@@ -137,6 +137,30 @@ Launch the FastMCP server over modern Streamable HTTP:
 python -m mcp_server_kalshi.server --transport streamable-http --host 127.0.0.1 --port 8000
 ```
 
+Connect your HTTP client or proxy to `http://127.0.0.1:8000/mcp`.
+
+**HTTP authentication.** Set `KALSHI_MCP_AUTH_TOKEN` to require `Authorization: Bearer <token>` on every HTTP request; a missing or wrong token gets `401`. The token is stripped, and a blank value counts as unset. It is attached when the server is built, so `mcp-server-kalshi`, `fastmcp run` and an ASGI host mounting `mcp.http_app()` (or `mcp.streamable_http_app()`) all enforce it when it is set. stdio never uses it.
+
+With no token, `mcp-server-kalshi` still starts an HTTP bind to `127.0.0.1`, `::1` or `localhost`, unauthenticated, and logs a warning. A tokenless bind to any other host exits with code 2. Set the token, bind to localhost, or set `KALSHI_MCP_ALLOW_UNAUTHENTICATED_BIND` to `1`, `true`, `yes` or `on` to accept an unauthenticated public bind (any other value refuses). Other entry points get the token but not the localhost check: `fastmcp run` and `http_app()` do not go through `mcp-server-kalshi`'s `main()`, so a bind to `0.0.0.0` with no token there is not refused and serves without authentication. The host or its process manager owns the bind address, so set `KALSHI_MCP_AUTH_TOKEN` there.
+
+To serve the image over HTTP, pass credentials and the token from your environment or an env file, never on the command line:
+
+```bash
+# export KALSHI_ENV, KALSHI_API_KEY and KALSHI_MCP_AUTH_TOKEN first, or use --env-file .env
+docker run --rm -p 8000:8000 \
+  -v /path/to/kalshi-key.pem:/home/mcp/kalshi-key.pem:ro \
+  -e KALSHI_ENV -e KALSHI_API_KEY -e KALSHI_MCP_AUTH_TOKEN \
+  -e KALSHI_PRIVATE_KEY_PATH=/home/mcp/kalshi-key.pem \
+  ghcr.io/christianclaudio/mcp-server-kalshi \
+  --transport streamable-http --host 0.0.0.0 --allowed-host mcp.example.com
+```
+
+Replace `mcp.example.com` with the host name clients use to reach the server.
+
+**Known limits.**
+* Only `mcp-server-kalshi` refuses a tokenless public bind (exit code 2). `fastmcp run` and `mcp.http_app()` enforce the token when it is set but do not refuse a tokenless public bind.
+* A token changed after the server is built is not picked up; restart the server.
+
 ### Docker
 ```json
 {

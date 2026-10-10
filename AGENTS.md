@@ -23,7 +23,7 @@ Data flows: request → Pydantic schema validation → API client → FastMCP 4 
 Key paths:
 - `src/mcp_server_kalshi/server.py` — `ToolRegistry`, every tool handler, FastMCP 4 engine, lifespan, streamable HTTP bridge.
 - `src/mcp_server_kalshi/kalshi_client/` — `base.py` (async httpx `BaseAPIClient`, `KalshiAuth` RSA-PSS/Ed25519 signing, `KalshiAPIError`), `client.py` (`KalshiAPIClient` endpoints + `build_*_order_payload` translators), `schemas.py` (Pydantic request models), `pdf.py` (contract-terms PDF text).
-- `src/mcp_server_kalshi/config.py` — Pydantic Settings; safety default `KALSHI_ENV=demo`. `ssrf.py` — allowlist and private-range checks for API base and PDF URLs.
+- `src/mcp_server_kalshi/config.py` — Pydantic Settings; safety default `KALSHI_ENV=demo`. `ssrf.py` — allowlist and private-range checks for API base and PDF URLs. `auth.py` — `KALSHI_MCP_AUTH_TOKEN` bearer verifier (`SharedTokenVerifier`, attached when `server.py` builds `mcp`) and the strict `KALSHI_MCP_ALLOW_UNAUTHENTICATED_BIND` opt-in; `main()` refuses a tokenless HTTP bind to a non-localhost host with exit code 2.
 - `scripts/check_tool_contract.py` — source of truth for the expected tool set and annotations. Do not hard-code tool counts elsewhere.
 - `scripts/check_openapi_drift.py`, `scripts/check_conformance.sh` + `conformance-baseline.yml`.
 - `scripts/release_notes.py` — release body from squash commits since the previous `v*` tag. `scripts/check_version.py` — runs after the build and reads the version from the single wheel in `dist/` (the file that ships, as release.yml's tag check does); fails on `0.0.0` (no git metadata) or `0.0.1.devN` (no reachable tag, a shallow checkout).

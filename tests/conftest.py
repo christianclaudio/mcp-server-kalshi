@@ -19,9 +19,24 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+import mcp_server_kalshi.server as server_mod
+from mcp_server_kalshi.auth import ALLOW_UNAUTHENTICATED_BIND_ENV, AUTH_TOKEN_ENV
 from mcp_server_kalshi.kalshi_client.client import KalshiAPIClient
 
 BASE_URL = "https://demo-api.kalshi.co/trade-api/v2"
+
+
+@pytest.fixture(autouse=True)
+def _clear_http_auth(monkeypatch):
+    """Start every test with HTTP auth off.
+
+    The module-level ``mcp`` reads ``KALSHI_MCP_AUTH_TOKEN`` when it is built at import, so a
+    token or opt-in exported in the developer's shell would change what every test serves.
+    Both variables are cleared and the module-level server's ``auth`` is reset to ``None``.
+    """
+    monkeypatch.delenv(AUTH_TOKEN_ENV, raising=False)
+    monkeypatch.delenv(ALLOW_UNAUTHENTICATED_BIND_ENV, raising=False)
+    monkeypatch.setattr(server_mod.mcp, "auth", None)
 
 
 @pytest.fixture(autouse=True)
