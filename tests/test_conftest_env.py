@@ -31,3 +31,22 @@ def test_live_run_detection():
     assert not _live_run_requested(["pytest", "-m", "not e2e"])
     assert not _live_run_requested(["pytest", "tests/test_config.py"])
     assert not _live_run_requested(["pytest", "-m"])
+
+
+def test_live_run_detection_requires_exact_e2e():
+    assert _live_run_requested(["pytest", "-m=e2e"])
+    assert _live_run_requested(["pytest", "-m", " e2e "])
+    assert not _live_run_requested(["pytest", "-m", "not (e2e)"])
+    assert not _live_run_requested(["pytest", "-m", "not  e2e"])
+    assert not _live_run_requested(["pytest", "-m=not (e2e)"])
+    assert not _live_run_requested(["pytest", "-m", "e2e or slow"])
+
+
+def test_dotenv_in_cwd_does_not_reach_settings(tmp_path, monkeypatch):
+    (tmp_path / ".env").write_text(
+        "KALSHI_API_KEY=from-dotenv\nKALSHI_ENV=prod\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+    settings = Settings()
+    assert settings.KALSHI_API_KEY is None
+    assert settings.KALSHI_ENV == "demo"
