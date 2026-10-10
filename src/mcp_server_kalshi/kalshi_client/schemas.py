@@ -366,6 +366,10 @@ class BatchCancelOrdersRequest(MCPSchemaBaseModel):
     )
 
 
+class GetTotalRestingOrderValueRequest(EmptyRequest):
+    """Request the total resting order value (FCM members only)."""
+
+
 class GetTagsByCategoriesRequest(EmptyRequest):
     """Request category-level discovery tags."""
 

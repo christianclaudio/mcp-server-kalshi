@@ -12,6 +12,7 @@ import pytest
 from mcp_server_kalshi.config import get_settings
 from mcp_server_kalshi.server import ToolRegistry, handle_call_tool
 
+FCM_ONLY_TOOLS = frozenset({"get_total_resting_order_value"})
 ACTIVE_MARKET_STATUSES = frozenset({"open", "active"})
 MULTIVARIATE_TICKER_PREFIX = "KXMVE"
 
@@ -218,6 +219,7 @@ async def test_all_discovered_kalshi_tools_live() -> None:
 
     auth_required_tools: dict[str, dict[str, Any]] = {
         "get_balance": {},
+        "get_total_resting_order_value": {},
         "get_positions": {},
         "get_fills": {},
         "get_settlements": {},
@@ -266,10 +268,12 @@ async def test_all_discovered_kalshi_tools_live() -> None:
                 status = "PASS (Simulation Preview Verified)"
             elif name in auth_required_tools:
                 if has_credentials:
+                    # The FCM-only endpoint returns 403 to regular member accounts.
                     assert (
                         not text.startswith(f"Error in {name}:")
                         or "400" in text
                         or "404" in text
+                        or (name in FCM_ONLY_TOOLS and "403" in text)
                     )
                     status = "PASS (Authenticated Payload Verified)"
                 else:

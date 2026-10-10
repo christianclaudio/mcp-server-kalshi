@@ -44,6 +44,7 @@ EXPECTED_TOOLS = {
     # batch & groups
     "batch_create_orders",
     "batch_cancel_orders",
+    "get_total_resting_order_value",
     "get_tags_by_categories",
     "get_sports_filters",
     "get_milestones",

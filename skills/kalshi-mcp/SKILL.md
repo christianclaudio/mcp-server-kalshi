@@ -77,7 +77,7 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 
 ---
 
-## 3. Tool Annotations (35 Tools)
+## 3. Tool Annotations (36 Tools)
 
 | Tool Name | Type / Scope | `readOnlyHint` | `destructiveHint` | `idempotentHint` | `openWorldHint` |
 | :--- | :--- | :---: | :---: | :---: | :---: |
@@ -103,6 +103,7 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 | `get_exchange_status` | Exchange | `true` | `false` | `true` | `false` |
 | `get_exchange_schedule`| Exchange | `true` | `false` | `true` | `false` |
 | `get_balance` | Portfolio | `true` | `false` | `true` | `false` |
+| `get_total_resting_order_value` (FCM members only; regular accounts get 403) | Portfolio | `true` | `false` | `true` | `false` |
 | `get_positions` | Portfolio | `true` | `false` | `true` | `false` |
 | `get_fills` | Portfolio | `true` | `false` | `true` | `false` |
 | `get_settlements` | Portfolio | `true` | `false` | `true` | `false` |

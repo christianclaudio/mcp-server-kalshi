@@ -12,7 +12,7 @@ This repository is Christian Claudio's fork of [`9crusher/mcp-server-kalshi`](ht
 graph TD
     Client["AI Agent (Claude / Cortex / Antigravity / Cursor)"] -->|"MCP Stdio / Streamable HTTP"| Server["mcp-server-kalshi"]
     Server --> Config["KalshiSettings & Safety Gates"]
-    Config -->|"KALSHI_READONLY=1"| RO["Read-Only Gate (28 tools)"]
+    Config -->|"KALSHI_READONLY=1"| RO["Read-Only Gate (29 tools)"]
     Config -->|"confirm=True"| Mutating["Order Execution Gate (7 tools)"]
     Config -->|"Default: demo"| EnvSelect{"Environment Router"}
     EnvSelect -->|"demo"| DemoAPI["Kalshi Demo API (demo-api.kalshi.co)"]
@@ -23,14 +23,14 @@ graph TD
 
 ---
 
-## 🚀 Highlights (35 Tools)
+## 🚀 Highlights (36 Tools)
 
 - **Discovery & Search** — `list_markets`, `get_market`, `list_events`, `get_event`, `list_series`, `get_series`, `get_tags_by_categories`, `get_sports_filters`.
 - **Research & Live Feeds** — `get_market_orderbook`, `get_market_candlesticks`, `get_market_trades`, `get_event_live_data`, `get_milestones`, `get_milestone`.
 - **Deep Contract Rules** — `get_market_rules` consolidates `rules_primary`/`rules_secondary`, early-close conditions, settlement sources, and series prohibitions; `fetch_rules_pdf` downloads and extracts the exact legal contract terms text.
 - **Multivariate & Parlays** — `list_multivariate_collections`, `get_multivariate_collection`.
 - **Exchange & Status** — `get_exchange_status`, `get_exchange_schedule`, `get_environment`.
-- **Portfolio & Exposure** — `get_balance`, `get_positions`, `get_fills`, `get_settlements`.
+- **Portfolio & Exposure** — `get_balance`, `get_total_resting_order_value` (FCM members only; regular accounts get 403), `get_positions`, `get_fills`, `get_settlements`.
 - **Trading & Execution** — `create_order`, `cancel_order`, `amend_order`, `decrease_order`, `batch_create_orders`, `batch_cancel_orders`, `list_orders`, `get_order`.
 - **Risk Management & Order Groups** — `list_order_groups`, `cancel_order_group` (e.g. One-Cancels-Other OCO groups).
 
@@ -40,7 +40,7 @@ graph TD
 
 - **Sandbox Default:** The server targets Kalshi's **demo (sandbox)** environment unless `KALSHI_ENV=prod` is explicitly set.
 - **Simulation Preview Gating:** Mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) require `confirm=true`. Without it, they return a structured simulation **preview** and send nothing.
-- **Read-Only Mode:** Run with `KALSHI_READONLY=1` to restrict registration exclusively to 28 read-only inspection tools.
+- **Read-Only Mode:** Run with `KALSHI_READONLY=1` to restrict registration exclusively to 29 read-only inspection tools.
 - **Secret Scrubbing:** Private keys (PEM), API keys, request signatures, and Bearer tokens are scrubbed from error logs via `redact_secrets()`.
 - **Intuitive Order Pricing:** Exposes intuitive whole **cents** limit pricing and automatically translates buy-NO ⇄ sell-YES orderbook math.
 
