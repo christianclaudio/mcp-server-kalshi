@@ -24,6 +24,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
+    "opentelemetry-sdk>=1.44.0,<1.45",
     "pre-commit",
     "build>=1.2.0",
     "twine>=5.0.0",

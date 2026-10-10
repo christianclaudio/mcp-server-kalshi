@@ -8,7 +8,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519, padding, rsa
 
-from ..errors import KalshiAPIError, redact_secrets
+from ..errors import KalshiAPIError
 from ..ssrf import avalidate_api_base_url, validate_api_base_url
 
 # Parsed key object, not the PEM banner. PKCS#8 RSA and Ed25519 both use
@@ -165,7 +165,7 @@ class BaseAPIClient:
             try:
                 body: Any = response.json()
             except Exception:
-                body = redact_secrets(response.text)
+                body = response.text
             raise KalshiAPIError(response.status_code, method, path, body)
         if not response.content:
             return {}

@@ -32,7 +32,7 @@ This MCP server executes trades and manages financial balances on the Kalshi exc
 - Authenticated requests are signed with your private key: RSA-PSS (SHA-256) or Ed25519. The server picks the scheme from the parsed key type.
 - **Never commit `.pem` private key files or API key IDs to version control.**
 - Place private keys in standard restricted paths (e.g. `chmod 600 ~/.kalshi/rsa.pem`).
-- Exception text returned by the server is scrubbed by `redact_secrets()` (`errors.py`).
+- Exception text returned by the server is scrubbed by `redact_message()` (`errors.py`): credential values are masked whole, and JSON inside a message is redacted value by value.
 
 ### 3. Read-Only Mode (`KALSHI_READONLY=1`)
 When connecting this server to autonomous agents, research workflows, or shared chat assistants, run with:
@@ -45,6 +45,16 @@ This strictly limits the server to **29 read-only discovery, research, and portf
 Mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) return a simulation preview unless called with `confirm=True`. This prevents unintended order placement or cancellation from hallucinated model outputs.
 
 ---
+
+### 5. Release Provenance
+Each release's wheel, sdist and GHCR image carry a GitHub build provenance attestation, created by a separate `attest` job that holds only `contents: read`, `id-token: write` and `attestations: write` (no GitHub Release or GHCR credentials). Verify before installing:
+
+```bash
+gh attestation verify mcp_server_kalshi-<version>-py3-none-any.whl --repo christianclaudio/mcp-server-kalshi
+gh attestation verify oci://ghcr.io/christianclaudio/mcp-server-kalshi:<version> --repo christianclaudio/mcp-server-kalshi
+```
+
+The attest job runs after the GitHub Release and the GHCR push, so a failed attestation does not undo them. If the MCP Registry job is ever enabled, it waits for `attest`, so a failed attestation blocks the registry publish.
 
 ## 🛡️ Summary of Deployment Postures
 
