@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import time
 from typing import Any
 
@@ -10,6 +11,111 @@ import pytest
 
 from mcp_server_kalshi.config import get_settings
 from mcp_server_kalshi.server import ToolRegistry, handle_call_tool
+
+ACTIVE_MARKET_STATUSES = frozenset({"open", "active"})
+MULTIVARIATE_TICKER_PREFIX = "KXMVE"
+
+
+def is_usable_sample_market(market: dict[str, Any]) -> bool:
+    """Return True for an open, single (non-multivariate) market with a ticker."""
+    ticker = market.get("ticker")
+    if not isinstance(ticker, str) or not ticker:
+        return False
+    if market.get("status") not in ACTIVE_MARKET_STATUSES:
+        return False
+    if ticker.startswith(MULTIVARIATE_TICKER_PREFIX):
+        return False
+    if market.get("mve_collection_ticker") or market.get("mve_selected_legs"):
+        return False
+    return True
+
+
+def pick_sample_market(markets: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the first usable sample market, or None when there is none."""
+    for market in markets:
+        if is_usable_sample_market(market):
+            return market
+    return None
+
+
+def require_sample_market(markets: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return the first usable sample market, or skip the test with a reason."""
+    market = pick_sample_market(markets)
+    if market is None:
+        pytest.skip(
+            "No open, non-multivariate Kalshi market found to use as the e2e sample"
+        )
+    return market
+
+
+LIST_EVENTS_ARGS: dict[str, Any] = {
+    "status": "open",
+    "with_nested_markets": True,
+    "limit": 100,
+}
+
+
+def extract_event_markets(text: str) -> list[dict[str, Any]]:
+    """Parse a list_events result into its nested markets.
+
+    An error result or an unexpected shape fails the test; only a
+    well-formed result can lead to a skip.
+    """
+    assert not text.startswith("Error in list_events:"), f"list_events failed: {text}"
+    try:
+        data = json.loads(text)
+    except ValueError as exc:
+        raise AssertionError(f"list_events returned non-JSON: {text!r}") from exc
+    assert isinstance(data, dict), f"list_events returned a non-object: {data!r}"
+    events = data.get("events")
+    assert isinstance(events, list), f"list_events has no events list: {data!r}"
+    markets: list[dict[str, Any]] = []
+    for event in events:
+        assert isinstance(event, dict), f"list_events event is not an object: {event!r}"
+        nested = event.get("markets")
+        if nested is None:
+            nested = []
+        assert isinstance(nested, list), f"event markets is not a list: {event!r}"
+        markets.extend(m for m in nested if isinstance(m, dict))
+    return markets
+
+
+async def discover_sample_market() -> dict[str, Any]:
+    """Find a live sample market. Lookup failures fail; an empty result skips."""
+    content = await handle_call_tool("list_events", LIST_EVENTS_ARGS)
+    assert content, "list_events returned no content"
+    return require_sample_market(extract_event_markets(content[0].text))
+
+
+def test_pick_sample_market_skips_multivariate_and_closed() -> None:
+    markets: list[dict[str, Any]] = [
+        {"ticker": "KXMVECROSSCATEGORY-S1-A", "status": "active"},
+        {"ticker": "KXFOO-1", "status": "active", "mve_collection_ticker": "KXC"},
+        {"ticker": "KXBAR-1", "status": "active", "mve_selected_legs": [{"x": 1}]},
+        {"ticker": "KXCLOSED-1", "status": "closed"},
+        {"ticker": "KXSETTLED-1", "status": "settled"},
+        {"status": "active"},
+        {"ticker": "KXGOOD-1", "status": "active", "event_ticker": "KXGOOD"},
+        {"ticker": "KXGOOD-2", "status": "open"},
+    ]
+    assert pick_sample_market(markets) == markets[6]
+    assert pick_sample_market([{"ticker": "KXOPEN-1", "status": "open"}]) == {
+        "ticker": "KXOPEN-1",
+        "status": "open",
+    }
+
+
+def test_require_sample_market_skips_when_none_usable() -> None:
+    assert pick_sample_market([]) is None
+    with pytest.raises(pytest.skip.Exception, match="non-multivariate"):
+        require_sample_market(
+            [
+                {"ticker": "KXMVEX-1", "status": "active"},
+                {"ticker": "KXDONE-1", "status": "finalized"},
+            ]
+        )
+    good = {"ticker": "KXGOOD-1", "status": "active"}
+    assert require_sample_market([good]) is good
 
 
 @pytest.mark.e2e
@@ -26,15 +132,11 @@ async def test_all_discovered_kalshi_tools_live() -> None:
     sample_milestone = "KXTEST"
     sample_collection = "KXTEST"
 
-    try:
-        m_res = await handle_call_tool("list_markets", {"limit": 1})
-        m_data = json.loads(m_res[0].text)
-        markets = m_data.get("markets", [])
-        if markets:
-            sample_ticker = markets[0].get("ticker", sample_ticker)
-            sample_event = markets[0].get("event_ticker", sample_event)
-    except Exception:
-        pass
+    # The first page of list_markets is mostly multivariate (KXMVE...) markets,
+    # which can 404 on per-market endpoints, so walk open events instead.
+    market = await discover_sample_market()
+    sample_ticker = market["ticker"]
+    sample_event = market.get("event_ticker") or sample_event
 
     try:
         s_res = await handle_call_tool("list_series", {})
@@ -201,3 +303,93 @@ async def test_all_discovered_kalshi_tools_live() -> None:
     assert len(nf_content) > 0
     assert nf_content[0].text.startswith("Error in get_market:")
     assert "404" in nf_content[0].text or "not found" in nf_content[0].text.lower()
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Error in list_events: 401 Unauthorized",
+        "not json",
+        "[]",
+        '{"cursor": ""}',
+        '{"events": {}}',
+        '{"events": ["KXFOO"]}',
+        '{"events": [{"markets": {}}]}',
+    ],
+)
+def test_extract_event_markets_fails_on_bad_result(text: str) -> None:
+    with pytest.raises(AssertionError):
+        extract_event_markets(text)
+
+
+def test_extract_event_markets_flattens_nested_markets() -> None:
+    text = json.dumps(
+        {
+            "events": [
+                {"markets": [{"ticker": "KXA-1"}, "junk"]},
+                {"markets": None},
+                {},
+                {"markets": [{"ticker": "KXB-1"}]},
+            ]
+        }
+    )
+    assert extract_event_markets(text) == [{"ticker": "KXA-1"}, {"ticker": "KXB-1"}]
+
+
+class _FakeContent:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+@pytest.mark.asyncio
+async def test_discover_sample_market_fails_on_lookup_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def boom(name: str, args: dict[str, Any]) -> list[_FakeContent]:
+        raise RuntimeError("network down")
+
+    async def error_result(name: str, args: dict[str, Any]) -> list[_FakeContent]:
+        return [_FakeContent("Error in list_events: 401 Unauthorized")]
+
+    async def empty_content(name: str, args: dict[str, Any]) -> list[_FakeContent]:
+        return []
+
+    async def bad_shape(name: str, args: dict[str, Any]) -> list[_FakeContent]:
+        return [_FakeContent('{"unexpected": true}')]
+
+    cases = (
+        (boom, RuntimeError),
+        (error_result, AssertionError),
+        (empty_content, AssertionError),
+        (bad_shape, AssertionError),
+    )
+    for fake, expected in cases:
+        monkeypatch.setattr(sys.modules[__name__], "handle_call_tool", fake)
+        try:
+            with pytest.raises(expected):
+                await discover_sample_market()
+        except pytest.skip.Exception:
+            pytest.fail(f"{fake.__name__}: lookup failure skipped instead of failing")
+
+
+@pytest.mark.asyncio
+async def test_discover_sample_market_skips_or_picks_on_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+    payload: dict[str, Any] = {
+        "events": [{"markets": [{"ticker": "KXMVEX-1", "status": "active"}]}]
+    }
+
+    async def fake(name: str, args: dict[str, Any]) -> list[_FakeContent]:
+        calls.append((name, args))
+        return [_FakeContent(json.dumps(payload))]
+
+    monkeypatch.setattr(sys.modules[__name__], "handle_call_tool", fake)
+    with pytest.raises(pytest.skip.Exception, match="non-multivariate"):
+        await discover_sample_market()
+    assert calls == [("list_events", LIST_EVENTS_ARGS)]
+
+    good = {"ticker": "KXGOOD-1", "status": "active", "event_ticker": "KXGOOD"}
+    payload["events"].append({"markets": [good]})
+    assert await discover_sample_market() == good
