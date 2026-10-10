@@ -46,6 +46,16 @@ Mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_o
 
 ---
 
+### 5. Release Provenance
+Each release's wheel, sdist and GHCR image carry a GitHub build provenance attestation, created by a separate `attest` job that holds only `contents: read`, `id-token: write` and `attestations: write` (no GitHub Release or GHCR credentials). Verify before installing:
+
+```bash
+gh attestation verify mcp_server_kalshi-<version>-py3-none-any.whl --repo christianclaudio/mcp-server-kalshi
+gh attestation verify oci://ghcr.io/christianclaudio/mcp-server-kalshi:<version> --repo christianclaudio/mcp-server-kalshi
+```
+
+The attest job runs after the GitHub Release and the GHCR push, so a failed attestation does not undo them. If the MCP Registry job is ever enabled, it waits for `attest`, so a failed attestation blocks the registry publish.
+
 ## 🛡️ Summary of Deployment Postures
 
 | Use Case | Recommended Configuration |

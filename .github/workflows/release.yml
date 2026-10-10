@@ -66,9 +66,9 @@ jobs:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    # Provenance comes from the separate attest job, so this job holds no attestation
+    # rights and no OIDC token.
     permissions:
-      id-token: write      # OIDC for build provenance
-      attestations: write  # build provenance
       contents: write      # create the GitHub Release and attach assets
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
@@ -84,11 +84,6 @@ jobs:
       # release before anything ships (the GitHub Release and the GHCR image).
       - name: Build release notes
         run: python3 scripts/release_notes.py --to "$GITHUB_REF_NAME" > release-notes.md
-
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be  # v2.4.0
-        with:
-          subject-path: "dist/*"
 
       # Fork-only: upstream (9crusher/mcp-server-kalshi) owns the public PyPI name
       # mcp-server-kalshi, so this fork does not publish to PyPI. Do not uncomment
@@ -113,6 +108,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      image: ${{ steps.image.outputs.name }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
@@ -125,32 +123,70 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Image name (GHCR requires lowercase)
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
       - name: Extract version from tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       # The Docker build context has no .git, so the tag version is passed in.
       - name: Build and push
+        id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6.19.2
         with:
           context: .
           push: true
+          # Provenance comes from the separate attest job; no buildx attestation
+          # manifests (provenance or SBOM), so the pushed tag is a plain image manifest.
+          provenance: false
+          sbom: false
           tags: |
-            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository }}:latest
+            ${{ steps.image.outputs.name }}:${{ steps.version.outputs.version }}
+            ${{ steps.image.outputs.name }}:latest
           build-args: |
             UV_DYNAMIC_VERSIONING_BYPASS=${{ steps.version.outputs.version }}
+
+  attest:
+    name: Attest build provenance
+    # Separate job so the OIDC token and attestation rights never share a job with
+    # the GitHub Release write or the GHCR push credentials. Runs after docker (which
+    # itself waits for publish), so it attests exactly the wheel/sdist that shipped
+    # and the pushed image digest.
+    needs: [build, docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read       # required by attest-build-provenance
+      id-token: write      # Sigstore signing certificate (OIDC)
+      attestations: write  # store the attestation on GitHub
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: dist
+
+      - name: Attest distribution provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be  # v2.4.0
+        with:
+          subject-path: "dist/*"
+
+      - name: Attest container image provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be  # v2.4.0
+        with:
+          subject-name: ${{ needs.docker.outputs.image }}
+          subject-digest: ${{ needs.docker.outputs.digest }}
 
   # MCP Registry publishing, disabled: this fork does not publish to the MCP
   # Registry (upstream owns io.github.9crusher/mcp-server-kalshi). server.json
   # lists one OCI package, the GHCR image, so publishing would need no PyPI
   # release: it would run after the docker job pushes the image, which must be
   # public and carry the io.modelcontextprotocol.server.name label (see
-  # Dockerfile). Uncomment the job below only if the maintainer decides to list
+  # Dockerfile). It also waits for the attest job, so a failed attestation stops
+  # the registry publish. Uncomment the job below only if the maintainer decides to list
   # the fork under io.github.christianclaudio/mcp-server-kalshi.
   # registry:
   #   name: Publish to MCP Registry
-  #   needs: [docker]
+  #   needs: [docker, attest]
   #   runs-on: ubuntu-latest
   #   permissions:
   #     contents: read
