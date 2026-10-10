@@ -175,12 +175,6 @@ EXPECTED_ANNOTATIONS: dict[str, dict[str, Any]] = {
         "idempotent": True,
         "openWorld": False,
     },
-    "get_portfolio_summary": {
-        "readOnly": True,
-        "destructive": False,
-        "idempotent": True,
-        "openWorld": False,
-    },
     "get_tags_by_categories": {
         "readOnly": True,
         "destructive": False,

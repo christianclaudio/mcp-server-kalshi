@@ -77,7 +77,7 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 
 ---
 
-## 3. Tool Annotations (36 Tools)
+## 3. Tool Annotations (35 Tools)
 
 | Tool Name | Type / Scope | `readOnlyHint` | `destructiveHint` | `idempotentHint` | `openWorldHint` |
 | :--- | :--- | :---: | :---: | :---: | :---: |
@@ -103,7 +103,6 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 | `get_exchange_status` | Exchange | `true` | `false` | `true` | `false` |
 | `get_exchange_schedule`| Exchange | `true` | `false` | `true` | `false` |
 | `get_balance` | Portfolio | `true` | `false` | `true` | `false` |
-| `get_portfolio_summary`| Portfolio | `true` | `false` | `true` | `false` |
 | `get_positions` | Portfolio | `true` | `false` | `true` | `false` |
 | `get_fills` | Portfolio | `true` | `false` | `true` | `false` |
 | `get_settlements` | Portfolio | `true` | `false` | `true` | `false` |
@@ -152,5 +151,5 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 ### Recipe 3: Live Score Grounding & In-Game Hedging
 1. Query live scoreboard: `get_event_live_data(event_ticker="KXNBA-27")`.
 2. Check milestones: `get_milestones(related_event_ticker="KXNBA-27")`.
-3. Review total resting order value: `get_portfolio_summary()`.
+3. Review resting orders: `list_orders(status="resting")`.
 4. Adjust resting orders dynamically.

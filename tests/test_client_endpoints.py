@@ -192,12 +192,7 @@ async def test_all_unauthenticated_and_authenticated_endpoints(
     await client.get_multivariate_collection("COL-1")
     assert requests[-1].url.path == "/trade-api/v2/multivariate_event_collections/COL-1"
 
-    # Summary & Order Groups
-    await client.get_portfolio_summary()
-    assert (
-        requests[-1].url.path
-        == "/trade-api/v2/portfolio/summary/total_resting_order_value"
-    )
+    # Order Groups
 
     await client.list_order_groups({"limit": 5})
     assert requests[-1].url.path == "/trade-api/v2/portfolio/order_groups"

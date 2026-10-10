@@ -291,12 +291,7 @@ class KalshiAPIClient(BaseAPIClient):
         quoted = urllib.parse.quote(collection_ticker, safe="")
         return await self.get(f"/multivariate_event_collections/{quoted}")
 
-    # ---- Portfolio Summary & Order Groups (auth) ---------------------------------
-    async def get_portfolio_summary(self) -> Any:
-        """Get total resting order value and exposure."""
-        self._require_auth()
-        return await self.get("/portfolio/summary/total_resting_order_value")
-
+    # ---- Order Groups (auth) ----------------------------------------------------
     async def list_order_groups(self, params: dict[str, Any] | None = None) -> Any:
         """List active order groups."""
         self._require_auth()

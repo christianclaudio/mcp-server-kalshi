@@ -60,7 +60,6 @@ from mcp_server_kalshi.kalshi_client.schemas import (
     GetMilestonesRequest,
     GetMultivariateCollectionRequest,
     GetOrderRequest,
-    GetPortfolioSummaryRequest,
     GetPositionsRequest,
     GetSeriesRequest,
     GetSettlementsRequest,
@@ -1047,19 +1046,6 @@ async def handle_batch_cancel_orders(request: dict[str, Any]) -> Any:
         "count": len(req.order_ids),
         "result": result,
     }
-
-
-@ToolRegistry.register_tool(
-    name="get_portfolio_summary",
-    description="Get total resting order value and collateral exposure (authenticated).",
-    input_schema=GetPortfolioSummaryRequest,
-    read_only=True,
-    destructive=False,
-    idempotent=True,
-    open_world=False,
-)
-async def handle_get_portfolio_summary(request: dict[str, Any]) -> Any:
-    return await kalshi_client.get_portfolio_summary()
 
 
 @ToolRegistry.register_tool(

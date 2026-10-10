@@ -218,7 +218,6 @@ async def test_all_discovered_kalshi_tools_live() -> None:
 
     auth_required_tools: dict[str, dict[str, Any]] = {
         "get_balance": {},
-        "get_portfolio_summary": {},
         "get_positions": {},
         "get_fills": {},
         "get_settlements": {},

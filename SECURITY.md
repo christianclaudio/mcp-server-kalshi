@@ -39,7 +39,7 @@ When connecting this server to autonomous agents, research workflows, or shared 
 ```bash
 KALSHI_READONLY=1 uvx --from git+https://github.com/christianclaudio/mcp-server-kalshi mcp-server-kalshi
 ```
-This strictly limits the server to **29 read-only discovery, research, and portfolio inspection tools**, removing all order creation, cancellation, and amendment endpoints from the agent context.
+This strictly limits the server to **28 read-only discovery, research, and portfolio inspection tools**, removing all order creation, cancellation, and amendment endpoints from the agent context.
 
 ### 4. Safety Gating (`confirm: bool = False`)
 Mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) return a simulation preview unless called with `confirm=True`. This prevents unintended order placement or cancellation from hallucinated model outputs.

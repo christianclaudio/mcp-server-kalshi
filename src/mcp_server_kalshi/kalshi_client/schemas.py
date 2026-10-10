@@ -366,10 +366,6 @@ class BatchCancelOrdersRequest(MCPSchemaBaseModel):
     )
 
 
-class GetPortfolioSummaryRequest(EmptyRequest):
-    """Request portfolio summary and total resting order exposure."""
-
-
 class GetTagsByCategoriesRequest(EmptyRequest):
     """Request category-level discovery tags."""
 
