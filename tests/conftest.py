@@ -12,18 +12,88 @@ Two building blocks used across the new tests:
 """
 
 import json
+import os
 import socket
+import sys
 
-import httpx
-import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+# Every environment variable ``Settings`` in ``config.py`` reads. ``BASE_URL`` has no prefix,
+# and ``KALSHI_API_KEY_ID`` is an alias for ``KALSHI_API_KEY``. ``KALSHI_MCP_AUTH_TOKEN`` and
+# the unauthenticated-bind opt-in are handled by ``_clear_http_auth`` below.
+KALSHI_SETTINGS_ENV = (
+    "KALSHI_ENV",
+    "BASE_URL",
+    "KALSHI_API_KEY",
+    "KALSHI_API_KEY_ID",
+    "KALSHI_PRIVATE_KEY_PATH",
+    "KALSHI_READONLY",
+    "KALSHI_MCP_STATELESS_HTTP",
+    "KALSHI_MCP_JSON_RESPONSE",
+)
 
-import mcp_server_kalshi.server as server_mod
-from mcp_server_kalshi.auth import ALLOW_UNAUTHENTICATED_BIND_ENV, AUTH_TOKEN_ENV
-from mcp_server_kalshi.kalshi_client.client import KalshiAPIClient
+
+def _marker_expressions(argv: list[str]) -> list[str]:
+    """Every ``-m`` expression on the command line (``-m EXPR``, ``-m=EXPR``, ``-mEXPR``)."""
+    exprs = []
+    for i, arg in enumerate(argv):
+        if arg == "-m":
+            if i + 1 < len(argv):
+                exprs.append(argv[i + 1])
+        elif arg.startswith("-m="):
+            exprs.append(arg[3:])
+        elif arg.startswith("-m") and len(arg) > 2:
+            exprs.append(arg[2:])
+    return exprs
+
+
+def _live_run_requested(argv: list[str]) -> bool:
+    """True only when the run selects exactly the live ``e2e`` tests (``-m e2e``).
+
+    Live tests need the developer's real credentials, so they are exempt from clearing.
+    Any other marker expression, such as ``not (e2e)``, counts as offline and clears.
+    """
+    exprs = _marker_expressions(argv)
+    return bool(exprs) and exprs[-1].strip() == "e2e"
+
+
+# Clear at import, before ``server.py`` builds its module-level ``settings`` from the
+# environment, so a credential exported in the shell can't leak into the offline suite.
+# ``.env`` loading is also turned off, so a ``.env`` file in the working directory can't
+# supply credentials or ``KALSHI_ENV`` to the module-level ``settings`` either.
+from mcp_server_kalshi.config import Settings  # noqa: E402
+
+_OFFLINE_RUN = not _live_run_requested(sys.argv)
+if _OFFLINE_RUN:
+    for _name in KALSHI_SETTINGS_ENV:
+        os.environ.pop(_name, None)
+    Settings.model_config["env_file"] = None
+
+import httpx  # noqa: E402
+import pytest  # noqa: E402
+from cryptography.hazmat.primitives import serialization  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
+
+import mcp_server_kalshi.server as server_mod  # noqa: E402
+from mcp_server_kalshi.auth import (  # noqa: E402
+    ALLOW_UNAUTHENTICATED_BIND_ENV,
+    AUTH_TOKEN_ENV,
+)
+from mcp_server_kalshi.kalshi_client.client import KalshiAPIClient  # noqa: E402
 
 BASE_URL = "https://demo-api.kalshi.co/trade-api/v2"
+
+
+@pytest.fixture(autouse=True)
+def _clear_kalshi_env(monkeypatch, request):
+    """Start every offline test with no Kalshi settings in the environment or ``.env``.
+
+    Tests that need a value set it with ``monkeypatch.setenv``. Live ``e2e`` tests opt out
+    because they run against the real API with the developer's credentials.
+    """
+    if request.node.get_closest_marker("e2e"):
+        return
+    for name in KALSHI_SETTINGS_ENV:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
 
 
 @pytest.fixture(autouse=True)
