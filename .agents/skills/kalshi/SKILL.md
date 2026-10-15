@@ -133,10 +133,25 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 ### Recipe 2: Batch Quoting & Emergency Flattening
 1. Generate batch simulation preview (`confirm=False`):
    ```python
-   batch_create_orders(orders=[
-       {"ticker": "KXNBA-27-PHI", "action": "buy", "side": "yes", "count": 10, "limit_price": 50},
-       {"ticker": "KXNBA-27-PHI", "action": "sell", "side": "yes", "count": 10, "limit_price": 55},
-   ], confirm=False)
+   batch_create_orders(
+       orders=[
+           {
+               "ticker": "KXNBA-27-PHI",
+               "action": "buy",
+               "side": "yes",
+               "count": 10,
+               "limit_price": 50,
+           },
+           {
+               "ticker": "KXNBA-27-PHI",
+               "action": "sell",
+               "side": "yes",
+               "count": 10,
+               "limit_price": 55,
+           },
+       ],
+       confirm=False,
+   )
    ```
 2. Request explicit user confirmation with the previewed batch summary.
 3. Submit confirmed batch orders (`confirm=True`):
