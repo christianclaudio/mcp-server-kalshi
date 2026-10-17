@@ -962,7 +962,8 @@ async def handle_decrease_order(request: dict[str, Any]) -> Any:
 @ToolRegistry.register_tool(
     name="batch_create_orders",
     description=(
-        "Place up to 20 limit orders in a single atomic request (V2). "
+        "Place multiple limit orders in one batched request (V2). Kalshi scales the maximum "
+        "batch size with your API tier and reports errors per order. "
         "SAFETY: returns a simulation preview unless 'confirm=true' is passed explicitly."
     ),
     input_schema=BatchCreateOrdersRequest,
@@ -1017,7 +1018,8 @@ async def handle_batch_create_orders(request: dict[str, Any]) -> Any:
 @ToolRegistry.register_tool(
     name="batch_cancel_orders",
     description=(
-        "Cancel up to 20 resting orders in a single atomic request (V2). SAFETY: returns a "
+        "Cancel multiple resting orders in one batched request (V2). Kalshi scales the maximum "
+        "batch size with your API tier and reports errors per order. SAFETY: returns a "
         "preview and cancels NOTHING unless confirm=true."
     ),
     input_schema=BatchCancelOrdersRequest,
@@ -1178,7 +1180,11 @@ async def handle_get_multivariate_collection(request: dict[str, Any]) -> Any:
 
 @ToolRegistry.register_tool(
     name="list_order_groups",
-    description="List active order groups (e.g. One-Cancels-Other / OCO risk groups) (authenticated).",
+    description=(
+        "List order groups (authenticated). An order group caps matched contracts over a rolling "
+        "15-second window; when the limit is hit, all orders in the group are canceled and new "
+        "orders are rejected until the group is reset."
+    ),
     input_schema=ListOrderGroupsRequest,
     read_only=True,
     destructive=False,
@@ -1193,7 +1199,7 @@ async def handle_list_order_groups(request: dict[str, Any]) -> Any:
 @ToolRegistry.register_tool(
     name="cancel_order_group",
     description=(
-        "Cancel and dissolve an active order group (authenticated). SAFETY: returns a preview "
+        "Delete an order group and cancel all orders in it (authenticated). SAFETY: returns a preview "
         "and cancels NOTHING unless confirm=true."
     ),
     input_schema=CancelOrderGroupRequest,

@@ -241,14 +241,14 @@ class KalshiAPIClient(BaseAPIClient):
 
     # ---- Batch Orders (auth) ------------------------------------------------------
     async def batch_create_orders(self, orders_payload: list[dict[str, Any]]) -> Any:
-        """Batch create up to 20 orders in one atomic call."""
+        """Batch create orders (V2); Kalshi scales the max batch size with the API tier."""
         self._require_auth()
         return await self.post(
             "/portfolio/events/orders/batched", json={"orders": orders_payload}
         )
 
     async def batch_cancel_orders(self, order_ids: list[str]) -> Any:
-        """Batch cancel up to 20 orders in one atomic call."""
+        """Batch cancel orders (V2); Kalshi scales the max batch size with the API tier."""
         self._require_auth()
         items = [{"order_id": oid} for oid in order_ids]
         return await self.delete(
@@ -303,7 +303,7 @@ class KalshiAPIClient(BaseAPIClient):
         return await self.get("/portfolio/order_groups", params=params)
 
     async def cancel_order_group(self, order_group_id: str) -> Any:
-        """Cancel/delete an active order group."""
+        """Delete an order group and cancel all orders in it."""
         self._require_auth()
         quoted = urllib.parse.quote(order_group_id, safe="")
         return await self.delete(f"/portfolio/order_groups/{quoted}")

@@ -74,3 +74,27 @@ def test_schema_with_enum_class_ref_and_no_description():
     assert schema["properties"]["optional_with_desc"]["description"] == "My description"
     assert "only_null" in schema["properties"]
     assert "anyOf" in schema["properties"]["multi_union"]
+
+
+def test_batch_requests_have_no_fixed_size_cap() -> None:
+    """Kalshi scales batch size with the API tier, so the schema sets no fixed cap.
+
+    https://docs.kalshi.com/api-reference/orders/batch-create-orders-v2
+    """
+    from mcp_server_kalshi.kalshi_client.schemas import (
+        BatchCancelOrdersRequest,
+        BatchCreateOrdersRequest,
+    )
+
+    item = {
+        "ticker": "T",
+        "action": "buy",
+        "side": "yes",
+        "count": 1,
+        "limit_price": 50,
+    }
+    assert len(BatchCreateOrdersRequest(orders=[item] * 25).orders) == 25
+    assert len(BatchCancelOrdersRequest(order_ids=["o"] * 25).order_ids) == 25
+    for model in (BatchCreateOrdersRequest, BatchCancelOrdersRequest):
+        props = model.model_json_schema()["properties"]
+        assert all("maxItems" not in p for p in props.values())
