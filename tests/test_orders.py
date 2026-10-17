@@ -52,13 +52,12 @@ def test_create_order_optional_fields():
         count=2.5,
         limit_price_cents=50,
         post_only=True,
-        reduce_only=True,
         client_order_id="abc",
         expiration_ts=1234,
     )
     assert payload["count"] == "2.5"
     assert payload["post_only"] is True
-    assert payload["reduce_only"] is True
+    assert "reduce_only" not in payload
     assert payload["client_order_id"] == "abc"
     assert payload["expiration_time"] == 1234
 
@@ -223,3 +222,75 @@ async def test_cancel_family_confirm_mutates(monkeypatch):
     )
     assert group["canceled"] is True
     assert spy.group_calls == ["grp-1"]
+
+
+@pytest.mark.parametrize("tif", ["good_till_canceled", "fill_or_kill"])
+def test_reduce_only_requires_ioc(tif):
+    with pytest.raises(ValueError, match="immediate_or_cancel") as exc:
+        build_create_order_payload(
+            ticker="T",
+            action="sell",
+            side="yes",
+            count=1,
+            limit_price_cents=50,
+            time_in_force=tif,
+            reduce_only=True,
+        )
+    assert "docs.kalshi.com/api-reference/orders/create-order-v2" in str(exc.value)
+
+
+def test_reduce_only_with_ioc_is_allowed():
+    p = build_create_order_payload(
+        ticker="T",
+        action="sell",
+        side="yes",
+        count=1,
+        limit_price_cents=50,
+        time_in_force="immediate_or_cancel",
+        reduce_only=True,
+    )
+    assert p["reduce_only"] is True
+    assert p["time_in_force"] == "immediate_or_cancel"
+
+
+async def test_create_order_tool_rejects_reduce_only_without_ioc():
+    from mcp_server_kalshi import server
+
+    with pytest.raises(ValueError, match="reduce_only=true requires"):
+        await server.handle_create_order(
+            {
+                "ticker": "T",
+                "action": "sell",
+                "side": "yes",
+                "count": 1,
+                "limit_price": 50,
+                "reduce_only": True,
+            }
+        )
+
+
+async def test_batch_create_tool_rejects_reduce_only_without_ioc():
+    from mcp_server_kalshi import server
+
+    ok = {"ticker": "T", "action": "buy", "side": "yes", "count": 1, "limit_price": 50}
+    bad = dict(ok, action="sell", reduce_only=True, time_in_force="good_till_canceled")
+    with pytest.raises(ValueError, match="reduce_only=true requires"):
+        await server.handle_batch_create_orders({"orders": [ok, bad]})
+
+
+async def test_batch_create_tool_allows_reduce_only_with_ioc():
+    from mcp_server_kalshi import server
+
+    item = {
+        "ticker": "T",
+        "action": "sell",
+        "side": "yes",
+        "count": 1,
+        "limit_price": 50,
+        "reduce_only": True,
+        "time_in_force": "immediate_or_cancel",
+    }
+    out = await server.handle_batch_create_orders({"orders": [item]})
+    res = json.loads(out[0].text)
+    assert res["preview"] is True
+    assert res["orders"][0]["kalshi_v2_payload"]["reduce_only"] is True

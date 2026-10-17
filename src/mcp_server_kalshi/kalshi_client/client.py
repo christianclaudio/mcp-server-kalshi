@@ -14,6 +14,13 @@ def series_ticker_from_market(ticker: str) -> str:
     return ticker.split("-", 1)[0]
 
 
+REDUCE_ONLY_IOC_MESSAGE = (
+    "reduce_only=true requires time_in_force='immediate_or_cancel'. Kalshi rejects "
+    "reduce_only orders with any other time_in_force "
+    "(https://docs.kalshi.com/api-reference/orders/create-order-v2)."
+)
+
+
 def build_create_order_payload(
     *,
     ticker: str,
@@ -43,6 +50,8 @@ def build_create_order_payload(
 
     (Buying NO @ p ≡ selling YES @ 1-p, since YES + NO = $1.)
     """
+    if reduce_only and time_in_force != "immediate_or_cancel":
+        raise ValueError(REDUCE_ONLY_IOC_MESSAGE)
     action = action.lower()
     side = side.lower()
     yes_leg_cents = limit_price_cents if side == "yes" else 100 - limit_price_cents
