@@ -32,7 +32,7 @@ graph TD
 - **Exchange & Status** — `get_exchange_status`, `get_exchange_schedule`, `get_environment`.
 - **Portfolio & Exposure** — `get_balance`, `get_total_resting_order_value` (FCM members only; regular accounts get 403), `get_positions`, `get_fills`, `get_settlements`.
 - **Trading & Execution** — `create_order`, `cancel_order`, `amend_order`, `decrease_order`, `batch_create_orders`, `batch_cancel_orders`, `list_orders`, `get_order`.
-- **Risk Management & Order Groups** — `list_order_groups`, `cancel_order_group` (e.g. One-Cancels-Other OCO groups).
+- **Risk Management & Order Groups** — `list_order_groups`, `cancel_order_group` (groups that cancel their orders when a rolling 15-second contracts limit is hit).
 
 ---
 

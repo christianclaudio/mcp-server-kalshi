@@ -14,6 +14,13 @@ def series_ticker_from_market(ticker: str) -> str:
     return ticker.split("-", 1)[0]
 
 
+REDUCE_ONLY_IOC_MESSAGE = (
+    "reduce_only=true requires time_in_force='immediate_or_cancel'. Kalshi rejects "
+    "reduce_only orders with any other time_in_force "
+    "(https://docs.kalshi.com/api-reference/orders/create-order-v2)."
+)
+
+
 def build_create_order_payload(
     *,
     ticker: str,
@@ -43,6 +50,8 @@ def build_create_order_payload(
 
     (Buying NO @ p ≡ selling YES @ 1-p, since YES + NO = $1.)
     """
+    if reduce_only and time_in_force != "immediate_or_cancel":
+        raise ValueError(REDUCE_ONLY_IOC_MESSAGE)
     action = action.lower()
     side = side.lower()
     yes_leg_cents = limit_price_cents if side == "yes" else 100 - limit_price_cents
@@ -241,14 +250,14 @@ class KalshiAPIClient(BaseAPIClient):
 
     # ---- Batch Orders (auth) ------------------------------------------------------
     async def batch_create_orders(self, orders_payload: list[dict[str, Any]]) -> Any:
-        """Batch create up to 20 orders in one atomic call."""
+        """Batch create orders (V2); Kalshi scales the max batch size with the API tier."""
         self._require_auth()
         return await self.post(
             "/portfolio/events/orders/batched", json={"orders": orders_payload}
         )
 
     async def batch_cancel_orders(self, order_ids: list[str]) -> Any:
-        """Batch cancel up to 20 orders in one atomic call."""
+        """Batch cancel orders (V2); Kalshi scales the max batch size with the API tier."""
         self._require_auth()
         items = [{"order_id": oid} for oid in order_ids]
         return await self.delete(
@@ -303,7 +312,7 @@ class KalshiAPIClient(BaseAPIClient):
         return await self.get("/portfolio/order_groups", params=params)
 
     async def cancel_order_group(self, order_group_id: str) -> Any:
-        """Cancel/delete an active order group."""
+        """Delete an order group and cancel all orders in it."""
         self._require_auth()
         quoted = urllib.parse.quote(order_group_id, safe="")
         return await self.delete(f"/portfolio/order_groups/{quoted}")

@@ -343,10 +343,10 @@ class BatchOrderItem(BaseModel):
 
 
 class BatchCreateOrdersRequest(MCPSchemaBaseModel):
-    """Batch order placement request (up to 20 orders in one atomic call)."""
+    """Batch order placement request (V2). Kalshi scales the max batch size with the account's API tier."""
 
     orders: list[BatchOrderItem] = Field(
-        ..., min_length=1, max_length=20, description="List of orders to submit."
+        ..., min_length=1, description="List of orders to submit."
     )
     confirm: StrictBool = Field(
         default=False,
@@ -355,10 +355,10 @@ class BatchCreateOrdersRequest(MCPSchemaBaseModel):
 
 
 class BatchCancelOrdersRequest(MCPSchemaBaseModel):
-    """Batch order cancellation request (up to 20 orders in one atomic call)."""
+    """Batch order cancellation request (V2). Kalshi scales the max batch size with the account's API tier."""
 
     order_ids: list[str] = Field(
-        ..., min_length=1, max_length=20, description="List of order IDs to cancel."
+        ..., min_length=1, description="List of order IDs to cancel."
     )
     confirm: StrictBool = Field(
         default=False,
@@ -428,14 +428,14 @@ class GetMultivariateCollectionRequest(MCPSchemaBaseModel):
 
 
 class ListOrderGroupsRequest(MCPSchemaBaseModel):
-    """List order groups (e.g. One-Cancels-Other / OCO risk groups)."""
+    """List order groups: groups with a contracts limit over a rolling 15-second window that cancel all their orders when the limit is hit."""
 
     limit: int | None = Field(default=20, ge=1, le=100, description="Page limit.")
     cursor: str | None = Field(default=None, description="Pagination cursor.")
 
 
 class CancelOrderGroupRequest(MCPSchemaBaseModel):
-    """Cancel / delete an order group."""
+    """Delete an order group, which cancels all orders in it."""
 
     order_group_id: str = Field(..., description="The order group ID to cancel.")
     confirm: StrictBool = Field(
