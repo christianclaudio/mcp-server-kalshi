@@ -13,6 +13,7 @@ import ipaddress
 import re
 import socket
 import ssl
+import urllib.request
 from collections.abc import Collection, Iterable
 from typing import Any, cast
 from urllib.parse import urlsplit, urlunsplit
@@ -347,6 +348,86 @@ def _take_checked(host: str) -> tuple[str, ...] | None:
     return ips
 
 
+def discard_checked(host: str) -> None:
+    """Drop a recorded check for ``host`` that no pinned connect will consume.
+
+    The API client calls this when it sends through an environment proxy, so the check
+    it just ran is not left behind for a later request in the same task.
+    """
+    _take_checked(host)
+
+
+# ---- Environment proxies ---------------------------------------------------------------
+# httpx resolves HTTP(S)_PROXY / ALL_PROXY / NO_PROXY only when no transport is passed in,
+# and the resolver it uses (``httpx._utils.get_environment_proxies`` plus ``URLPattern``)
+# is private. ``environment_proxy_for`` repeats that resolution on the public stdlib call
+# httpx itself makes, ``urllib.request.getproxies()``, so the API client can choose
+# between a proxied and a pinned transport exactly where httpx would have proxied.
+# tests/test_env_proxy.py checks it against httpx's own resolver.
+
+
+def _proxy_pattern_priority(pattern: httpx.URL) -> tuple[int, int, int]:
+    # Same order as httpx's URLPattern: a port first, then the longer host, then the
+    # longer scheme ("all" counts as no scheme, "*" as no host).
+    scheme = "" if pattern.scheme == "all" else pattern.scheme
+    host = "" if pattern.host == "*" else pattern.host
+    return (0 if pattern.port is not None else 1, -len(host), -len(scheme))
+
+
+def _proxy_pattern_matches(pattern: httpx.URL, url: httpx.URL) -> bool:
+    if pattern.scheme != "all" and pattern.scheme != url.scheme:
+        return False
+    host = pattern.host
+    if host and host != "*":
+        if host.startswith("*."):
+            regex = "^.+\\." + re.escape(host[2:]) + "$"
+        elif host.startswith("*"):
+            regex = "^(.+\\.)?" + re.escape(host[1:]) + "$"
+        else:
+            regex = "^" + re.escape(host) + "$"
+        if not re.match(regex, url.host):
+            return False
+    return pattern.port is None or pattern.port == url.port
+
+
+def environment_proxy_for(url: str) -> str | None:
+    """Return the environment proxy URL httpx would use for ``url``, or ``None``.
+
+    ``HTTP_PROXY`` / ``HTTPS_PROXY`` / ``ALL_PROXY`` apply by scheme; ``NO_PROXY`` is read
+    curl-style as httpx reads it (``*`` turns proxies off, ``example.com`` covers the
+    domain and its subdomains, ``.example.com`` only subdomains, and IPs, ``localhost``
+    and ``scheme://host`` entries match as written). The most specific matching entry
+    wins; a ``NO_PROXY`` match means a direct connection.
+    """
+    target = httpx.URL(url)
+    info = urllib.request.getproxies()
+    mounts: dict[str, str | None] = {}
+    for scheme in ("http", "https", "all"):
+        value = info.get(scheme)
+        if value:
+            mounts[f"{scheme}://"] = value if "://" in value else f"http://{value}"
+    for entry in (part.strip() for part in info.get("no", "").split(",")):
+        if entry == "*":
+            return None
+        if not entry:
+            continue
+        if "://" in entry:
+            mounts[entry] = None
+        elif _parse_ip(entry.split("/")[0]) is not None:
+            ip = entry.split("/")[0]
+            mounts[f"all://[{entry}]" if ":" in ip else f"all://{entry}"] = None
+        elif entry.lower() == "localhost":
+            mounts[f"all://{entry}"] = None
+        else:
+            mounts[f"all://*{entry}"] = None
+    parsed = [(httpx.URL(key), proxy) for key, proxy in mounts.items()]
+    parsed.sort(key=lambda item: _proxy_pattern_priority(item[0]))
+    for pattern, proxy in parsed:
+        if _proxy_pattern_matches(pattern, target):
+            return proxy
+    return None
+
+
 class _PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
     """Dial only an address that passed ``_assert_public_dns`` for the requested host."""
 
@@ -402,9 +483,12 @@ class SSRFSafeAsyncTransport(httpx.AsyncHTTPTransport):
     lookup per request. The connection pool is built with a network backend that dials
     only those addresses, in resolver order, so a second DNS answer cannot send the
     request somewhere unchecked. A host with no checked address is refused at connect.
-    Proxies and Unix sockets are not supported: both would bypass the pin. httpx
-    ignores environment proxies whenever a transport is passed in, so every client
-    built on this transport connects directly.
+    Unix sockets are refused, and the transport never dials through a proxy: a proxy
+    resolves the name itself, so the pin cannot apply there. httpx ignores environment
+    proxies whenever a transport is passed in, so a client built on this transport
+    connects directly. The API client uses httpx's proxied transport instead when an
+    environment proxy applies to its URL (``environment_proxy_for``), after the same
+    hostname check.
     """
 
     def __init__(

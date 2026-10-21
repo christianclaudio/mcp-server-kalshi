@@ -248,10 +248,11 @@ async def fetch_spec_text(spec_url: str) -> str:
     """Check the spec URL, then GET it from the checked address (no redirects).
 
     The transport connects only to an address that passed the check, keeping the
-    hostname for the Host header, TLS SNI and certificate verification. httpx ignores
-    ``HTTP(S)_PROXY`` / ``ALL_PROXY`` whenever a transport is passed in, so the fetch
-    always connects directly, through the pin, and an environment proxy is never used.
-    ``trust_env=False`` is belt-and-braces.
+    hostname for the Host header, TLS SNI and certificate verification. This is a CI
+    script, so it stays pinned and unproxied: httpx ignores ``HTTP(S)_PROXY`` /
+    ``ALL_PROXY`` whenever a transport is passed in, and ``trust_env=False`` turns them
+    off as well, so the fetch always connects directly to the checked address. A
+    redirect is not followed; it fails the fetch.
     """
     safe_url = await avalidate_spec_url(spec_url)
     async with httpx.AsyncClient(

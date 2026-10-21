@@ -81,6 +81,28 @@ def test_drift_fetch_connects_to_checked_ip(tmp_path) -> None:
     _assert_pinned(net, dns, "docs.kalshi.com")
 
 
+def test_drift_fetch_does_not_follow_redirects(tmp_path) -> None:
+    """A 302 from the checked docs host fails the fetch; the Location is never requested."""
+    net = FakeNetwork(status=302)
+    net.response = (
+        b"HTTP/1.1 302 Found\r\nLocation: https://docs.kalshi.com/moved.yaml\r\n"
+        b"Content-Length: 0\r\n\r\n"
+    )
+    client = tmp_path / "client.py"
+    client.write_text("class C:\n    pass\n")
+    allow = tmp_path / "allowlist.txt"
+    allow.write_text("")
+    with net.patches(), patch("socket.getaddrinfo", return_value=answer(V4)) as dns:
+        code = check_drift(
+            spec_url="https://docs.kalshi.com/openapi.yaml",
+            client_path=client,
+            allowlist_path=allow,
+        )
+    assert code == 1
+    assert net.requests_by_connection() == [[b"GET /openapi.yaml HTTP/1.1"]]
+    assert [c.args[0] for c in dns.call_args_list] == ["docs.kalshi.com"]
+
+
 # ---- SSRFSafeAsyncTransport ------------------------------------------------------------
 
 
