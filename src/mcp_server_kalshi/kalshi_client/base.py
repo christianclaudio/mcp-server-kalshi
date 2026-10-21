@@ -32,7 +32,7 @@ def load_private_key_from_file(file_path: str) -> KalshiPrivateKey:
         private_key = serialization.load_pem_private_key(
             key_file.read(), password=None, backend=default_backend()
         )
-    if isinstance(private_key, (rsa.RSAPrivateKey, ed25519.Ed25519PrivateKey)):
+    if isinstance(private_key, rsa.RSAPrivateKey | ed25519.Ed25519PrivateKey):
         return private_key
     raise ValueError(
         f"Expected an RSA or Ed25519 private key in {file_path}, "

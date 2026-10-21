@@ -353,7 +353,7 @@ def redact_message(text: str) -> str:
                 # Nesting deeper than the decoder's recursion limit (Python 3.10/3.11 raise
                 # RecursionError) is treated as JSON that does not parse.
                 value, end = None, i
-            if isinstance(value, (dict, list)):
+            if isinstance(value, dict | list):
                 parts.append(redact_secrets(prefix))
                 parts.append(json.dumps(redact_payload(value)))
                 start = i = end
@@ -395,7 +395,7 @@ def redact_payload(value: Any) -> Any:
             )
             for k, v in value.items()
         }
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [redact_payload(v) for v in value]
     if isinstance(value, str):
         return redact_secrets(value)
