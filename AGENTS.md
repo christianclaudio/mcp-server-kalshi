@@ -1,3 +1,15 @@
+---
+vcs:
+  system: github
+  remote: https://github.com/christianclaudio/mcp-server-kalshi
+  owner: christianclaudio
+  repo: mcp-server-kalshi
+  default_branch: main
+  branch_policy: pr_only
+  merge_method: squash
+  delete_branch_on_merge: true
+---
+
 # AGENTS.md
 
 Instructions for AI coding agents (Antigravity, Claude Code, Copilot, Cursor, Windsurf) working on this repository or integrating Kalshi prediction market capabilities.
