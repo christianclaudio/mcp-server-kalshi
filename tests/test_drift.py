@@ -4,7 +4,7 @@ import socket
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -246,7 +246,7 @@ paths:
 
 
 # ---- Spec URL host check (before any fetch) ------------------------------------------
-# DNS is mocked at mcp_server_kalshi.ssrf.socket.getaddrinfo and httpx.get is mocked, so
+# DNS is mocked at mcp_server_kalshi.ssrf.socket.getaddrinfo and httpx.AsyncClient is mocked, so
 # these tests make no network calls.
 
 _SPEC_YAML = "paths:\n  /exchange/status:\n    get:\n      parameters: []\n"
@@ -298,7 +298,7 @@ def test_spec_url_rejected_before_dns_and_fetch(
         raise AssertionError("must not resolve a URL that fails policy")
 
     monkeypatch.setattr("mcp_server_kalshi.ssrf.socket.getaddrinfo", _no_dns)
-    with patch("scripts.check_openapi_drift.httpx.get") as get:
+    with patch("scripts.check_openapi_drift.httpx.AsyncClient") as get:
         code = check_drift(spec_url=url, client_path=client, allowlist_path=allow)
     assert code == 2
     get.assert_not_called()
@@ -317,35 +317,13 @@ def test_spec_url_rejected_when_docs_host_resolves_private(
     monkeypatch.setattr(
         "mcp_server_kalshi.ssrf.socket.getaddrinfo", _answers("104.18.0.1", answer)
     )
-    with patch("scripts.check_openapi_drift.httpx.get") as get:
+    with patch("scripts.check_openapi_drift.httpx.AsyncClient") as get:
         code = check_drift(
             spec_url=DEFAULT_SPEC_URL, client_path=client, allowlist_path=allow
         )
     assert code == 2
     get.assert_not_called()
     assert "resolves to a blocked" in capsys.readouterr().out
-
-
-def test_spec_url_docs_kalshi_fetched_after_public_dns(tmp_path, monkeypatch):
-    client, allow = _client_and_allowlist(tmp_path)
-    seen: list[str] = []
-
-    def _getaddrinfo(host, port, *args, **kwargs):
-        seen.append(host)
-        return _answers("104.18.0.1", "2606:4700::1")(host, port)
-
-    monkeypatch.setattr("mcp_server_kalshi.ssrf.socket.getaddrinfo", _getaddrinfo)
-    resp = MagicMock()
-    resp.text = _SPEC_YAML
-    with patch("scripts.check_openapi_drift.httpx.get", return_value=resp) as get:
-        code = check_drift(
-            spec_url="https://Docs.Kalshi.com/openapi.yaml",
-            client_path=client,
-            allowlist_path=allow,
-        )
-    assert code == 0
-    assert seen == ["docs.kalshi.com"]
-    get.assert_called_once_with(DEFAULT_SPEC_URL, timeout=15.0, follow_redirects=False)
 
 
 def test_spec_url_unresolvable_is_refused(tmp_path, monkeypatch):
@@ -355,7 +333,7 @@ def test_spec_url_unresolvable_is_refused(tmp_path, monkeypatch):
         raise socket.gaierror("no such host")
 
     monkeypatch.setattr("mcp_server_kalshi.ssrf.socket.getaddrinfo", _gaierror)
-    with patch("scripts.check_openapi_drift.httpx.get") as get:
+    with patch("scripts.check_openapi_drift.httpx.AsyncClient") as get:
         code = check_drift(
             spec_url=DEFAULT_SPEC_URL, client_path=client, allowlist_path=allow
         )

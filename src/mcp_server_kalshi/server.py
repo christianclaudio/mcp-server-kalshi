@@ -75,7 +75,7 @@ from mcp_server_kalshi.kalshi_client.schemas import (
     ListSeriesRequest,
     MCPSchemaBaseModel,
 )
-from mcp_server_kalshi.ssrf import avalidate_pdf_url
+from mcp_server_kalshi.ssrf import validate_pdf_url
 
 
 def _background_info(env_label: str, is_production: bool) -> str:
@@ -670,7 +670,8 @@ async def handle_fetch_rules_pdf(request: dict[str, Any]) -> Any:
                 f"contract_url={series.get('contract_url')}"
             )
         url = candidate
-    return await fetch_pdf_text(await avalidate_pdf_url(url))
+    # Shape check only; fetch_pdf_text runs the one DNS check and pins the connect.
+    return await fetch_pdf_text(validate_pdf_url(url))
 
 
 # =============================== Environment ================================
@@ -1061,7 +1062,8 @@ async def handle_batch_create_orders(request: dict[str, Any]) -> Any:
     name="batch_cancel_orders",
     description=(
         "Cancel multiple resting orders in one batched request (V2). Kalshi scales the maximum "
-        "batch size with your API tier and reports errors per order. SAFETY: returns a "
+        "batch size with your API tier and reports errors per order. Pass exactly one of "
+        "order_ids or orders, not both. SAFETY: returns a "
         "preview and cancels NOTHING unless confirm=true."
     ),
     input_schema=BatchCancelOrdersRequest,

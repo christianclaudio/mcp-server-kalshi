@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 import httpx
 from pypdf import PdfReader
 
-from ..ssrf import UnsafeURLError, avalidate_pdf_url
+from ..ssrf import SSRFSafeAsyncTransport, UnsafeURLError, avalidate_pdf_url
 
 # Redirect hops after the initial response. Each hop is allowlisted again.
 MAX_PDF_REDIRECTS = 3
@@ -20,6 +20,7 @@ async def _download_pdf(url: str) -> tuple[str, bytes]:
         timeout=30,
         follow_redirects=False,
         trust_env=False,
+        transport=SSRFSafeAsyncTransport(),
     ) as client:
         for hop in range(MAX_PDF_REDIRECTS + 1):
             response = await client.get(current)

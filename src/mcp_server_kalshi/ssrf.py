@@ -8,12 +8,16 @@ the allowlist are not resolved.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import ipaddress
 import re
 import socket
-from collections.abc import Collection
-from typing import cast
+from collections.abc import Collection, Iterable
+from typing import Any, cast
 from urllib.parse import urlsplit, urlunsplit
+
+import httpcore
+import httpx
 
 # Trade API hosts: the shared demo and production hosts (config.ENV_REST_BASE) and the
 # dedicated production and demo hosts (config.PROD_DEDICATED_REST_BASE and
@@ -142,12 +146,14 @@ def _port_allowed(scheme: str, port: int | None) -> bool:
     return port == 80
 
 
-async def _assert_public_dns(host: str) -> None:
+async def _assert_public_dns(host: str) -> tuple[str, ...]:
     """Reject allowlisted hosts that resolve to a blocked address.
 
     The lookup uses the running loop's ``getaddrinfo``, which runs in the default
     executor, so API and PDF hops do not block the event loop. Fail-closed: any
-    lookup error or blocked answer rejects the URL.
+    lookup error or blocked answer rejects the URL. Returns the checked addresses and
+    records them for ``host`` so the next request connects to one of them without a
+    second lookup (see ``SSRFSafeAsyncTransport``).
     """
     loop = asyncio.get_running_loop()
     try:
@@ -156,6 +162,7 @@ async def _assert_public_dns(host: str) -> None:
         raise UnsafeURLError(f"URL host {host!r} could not be resolved") from exc
     if not infos:
         raise UnsafeURLError(f"URL host {host!r} could not be resolved")
+    checked: list[str] = []
     for info in infos:
         raw = info[4][0]
         if not isinstance(raw, str):
@@ -169,6 +176,10 @@ async def _assert_public_dns(host: str) -> None:
                 f"URL host {host!r} resolves to a blocked private, "
                 "loopback, link-local, or metadata address"
             )
+        checked.append(str(address))
+    ips = tuple(dict.fromkeys(checked))
+    _record_checked(host, ips)
+    return ips
 
 
 def _parse_outbound_url(
@@ -301,3 +312,109 @@ async def avalidate_spec_url(url: str) -> str:
     )
     await _assert_public_dns(host)
     return normalized
+
+
+# ---- Connect to the checked IP --------------------------------------------------------
+# Ported from the template's SSRFSafeAsyncTransport (template_mcp/client.py:83), which
+# re-validates DNS on each request. That alone still lets httpcore resolve the name a
+# second time when it connects, so this version also pins the connect: the transport
+# hands httpcore the addresses that passed the check, and the network backend dials one
+# of them. The URL keeps the hostname, so the Host header, SNI and certificate
+# verification all use the original name.
+
+_CHECKED_IPS: contextvars.ContextVar[dict[str, tuple[str, ...]] | None] = (
+    contextvars.ContextVar("kalshi_checked_ips", default=None)
+)
+_PINNED_IPS: contextvars.ContextVar[dict[str, tuple[str, ...]] | None] = (
+    contextvars.ContextVar("kalshi_pinned_ips", default=None)
+)
+
+
+def _record_checked(host: str, ips: tuple[str, ...]) -> None:
+    """Remember the addresses that just passed the check, for this task's next request."""
+    current = dict(_CHECKED_IPS.get() or {})
+    current[host.lower()] = ips
+    _CHECKED_IPS.set(current)
+
+
+def _take_checked(host: str) -> tuple[str, ...] | None:
+    """Consume a recorded check for ``host`` (one check serves one request)."""
+    current = _CHECKED_IPS.get()
+    if not current or host.lower() not in current:
+        return None
+    remaining = dict(current)
+    ips = remaining.pop(host.lower())
+    _CHECKED_IPS.set(remaining)
+    return ips
+
+
+class _PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
+    """Dial only an address that passed ``_assert_public_dns`` for the requested host."""
+
+    def __init__(self, inner: httpcore.AsyncNetworkBackend | None = None) -> None:
+        self._inner = inner or httpcore.AnyIOBackend()
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: Iterable[Any] | None = None,
+    ) -> httpcore.AsyncNetworkStream:
+        pins = _PINNED_IPS.get() or {}
+        ips = pins.get(host.lower())
+        if not ips:
+            raise UnsafeURLError(
+                f"URL host {host!r} has no checked address to connect to"
+            )
+        last: Exception | None = None
+        for ip in ips:
+            try:
+                return await self._inner.connect_tcp(
+                    ip,
+                    port,
+                    timeout=timeout,
+                    local_address=local_address,
+                    socket_options=socket_options,
+                )
+            except (httpcore.ConnectError, httpcore.ConnectTimeout, OSError) as exc:
+                last = exc
+        assert last is not None
+        raise last
+
+    async def connect_unix_socket(  # pragma: no cover - never used by these clients
+        self,
+        path: str,
+        timeout: float | None = None,
+        socket_options: Iterable[Any] | None = None,
+    ) -> httpcore.AsyncNetworkStream:
+        raise UnsafeURLError("unix sockets are not allowed")
+
+    async def sleep(self, seconds: float) -> None:
+        await self._inner.sleep(seconds)
+
+
+class SSRFSafeAsyncTransport(httpx.AsyncHTTPTransport):
+    """Async transport that connects only to an address checked for the request's host.
+
+    If the caller just validated the host (``avalidate_*``), those addresses are used;
+    otherwise the transport runs the same check itself. Either way there is exactly one
+    lookup per request and httpcore never resolves the name again.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._pool._network_backend = _PinnedNetworkBackend()
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        host = request.url.host
+        ips = _take_checked(host)
+        if ips is None:
+            ips = await _assert_public_dns(host)
+            _take_checked(host)
+        token = _PINNED_IPS.set({host.lower(): ips})
+        try:
+            return await super().handle_async_request(request)
+        finally:
+            _PINNED_IPS.reset(token)

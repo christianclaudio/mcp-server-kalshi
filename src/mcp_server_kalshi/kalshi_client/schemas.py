@@ -239,7 +239,15 @@ class GetMarketCandlesticksRequest(MCPSchemaBaseModel):
 
 
 class GetMarketTradesRequest(_Paginated):
-    limit: int | None = _page_limit(1000, minimum=0)
+    limit: int | None = Field(
+        default=None,
+        ge=0,
+        le=1000,
+        description=(
+            "Results per page (0-1000). limit=0 returns Kalshi's default page of 100 "
+            "rows plus a cursor."
+        ),
+    )
     ticker: str = Field(..., description="The market ticker.")
     min_ts: int | None = Field(
         default=None, description="Only trades after this Unix ts."

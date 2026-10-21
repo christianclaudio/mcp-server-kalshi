@@ -9,7 +9,11 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519, padding, rsa
 
 from ..errors import KalshiAPIError
-from ..ssrf import avalidate_api_base_url, validate_api_base_url
+from ..ssrf import (
+    SSRFSafeAsyncTransport,
+    avalidate_api_base_url,
+    validate_api_base_url,
+)
 
 # Parsed key object, not the PEM banner. PKCS#8 RSA and Ed25519 both use
 # "BEGIN PRIVATE KEY".
@@ -137,6 +141,7 @@ class BaseAPIClient:
                 timeout=self._timeout,
                 auth=auth,
                 headers={"Content-Type": "application/json"},
+                transport=SSRFSafeAsyncTransport(),
             )
         return self._client
 
