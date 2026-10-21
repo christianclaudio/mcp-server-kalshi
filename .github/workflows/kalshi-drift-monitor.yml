@@ -22,6 +22,10 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
+          # Newest uv that meets pyproject.toml's [tool.uv] required-version (>=0.13.4, from
+          # FastMCP's October 2026 certificate authority incident notice). setup-uv v5.4.2
+          # names this input pyproject-file; v6+ calls it version-file.
+          pyproject-file: "pyproject.toml"
           python-version: "3.12"
       - name: Install dependencies
         run: uv sync --locked --all-extras

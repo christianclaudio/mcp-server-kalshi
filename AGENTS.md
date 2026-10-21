@@ -23,7 +23,7 @@ This is `mcp-server-kalshi` — an enterprise Model Context Protocol (MCP) serve
 **Lineage & Purpose**:
 - **Upstream Origin**: Maintained by christianclaudio as an enterprise-hardened fork of `9crusher/mcp-server-kalshi`.
 - **Primary Function**: Built for deep end-to-end trading workflows (market discovery → candidate research → legal settlement rules extraction → order simulation/placement).
-- **Core Stack**: Python 3.10+, `uv`, `fastmcp>=4.1.1` + `mcp>=2.3.0` (FastMCP 4 engine, lifespan management, host & origin protection, Spec 2026-07-28), `httpx` (async connection pooling & retry engine), `pydantic` v2, and `cryptography` (RSA-PSS and Ed25519 signing).
+- **Core Stack**: Python 3.10+, `uv` (0.13.4 or later), `fastmcp>=4.1.3` + `mcp>=2.3.0` (FastMCP 4 engine, lifespan management, host & origin protection, Spec 2026-07-28), `httpx` (async connection pooling & retry engine), `pydantic` v2, and `cryptography` (RSA-PSS and Ed25519 signing).
 - **Distribution**: Install from git or `ghcr.io/christianclaudio/mcp-server-kalshi`. This fork does not publish to public PyPI or the MCP Registry. Upstream owns the public package name `mcp-server-kalshi` and registry id `io.github.9crusher/mcp-server-kalshi`.
 
 ---
@@ -108,6 +108,8 @@ When translating an API endpoint or Kalshi documentation into an MCP tool, follo
 ---
 
 ## 🛠️ Development & Verification Commands
+
+uv 0.13.4 or later is required (`[tool.uv] required-version` in `pyproject.toml`, from FastMCP's [certificate authority incident notice (October 2026)](https://github.com/PrefectHQ/fastmcp/blob/main/SECURITY.md#certificate-authority-incident-october-2026)); older uv refuses to run, and CI's `setup-uv` installs from that setting. The same notice sets the other trust-store floors: `certifi>=2026.10.19` is a direct dependency, the `Dockerfile` builder installs with `pip>=26.2.2`, its runtime stage upgrades the OS `ca-certificates` package and fails the build below Debian trixie's patched `20250419+deb13u1`, and `release.yml` upgrades its build pip to `pip>=26.2.2`.
 
 ```bash
 # Install editable with dev dependencies (matches the locked CI resolve)
