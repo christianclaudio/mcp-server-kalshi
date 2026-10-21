@@ -244,8 +244,8 @@ class GetMarketTradesRequest(_Paginated):
         ge=0,
         le=1000,
         description=(
-            "Results per page (0-1000). limit=0 returns Kalshi's default page of 100 "
-            "rows plus a cursor."
+            "Results per page (0-1000). The spec sets a minimum of 0 and a default "
+            "of 100."
         ),
     )
     ticker: str = Field(..., description="The market ticker.")
