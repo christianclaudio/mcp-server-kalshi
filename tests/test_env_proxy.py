@@ -8,6 +8,7 @@ by ``tests/fake_network.py`` and DNS is patched; nothing opens a socket.
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import httpx
@@ -59,7 +60,7 @@ def _assert_direct(net: FakeNetwork, lookups: list[str], transport: object) -> N
 
 @pytest.mark.parametrize("name", ["HTTPS_PROXY", "https_proxy", "ALL_PROXY"])
 async def test_api_client_sends_through_an_applicable_env_proxy(
-    monkeypatch, name: str
+    monkeypatch: pytest.MonkeyPatch, name: str
 ) -> None:
     monkeypatch.setenv(name, PROXY)
     net = FakeNetwork(body={})
@@ -77,7 +78,7 @@ async def test_api_client_sends_through_an_applicable_env_proxy(
 
 @pytest.mark.parametrize("blocked", ["127.0.0.1", "169.254.169.254", "10.0.0.5"])
 async def test_proxy_path_still_refuses_a_blocked_answer(
-    monkeypatch, blocked: str
+    monkeypatch: pytest.MonkeyPatch, blocked: str
 ) -> None:
     monkeypatch.setenv("HTTPS_PROXY", PROXY)
     net = FakeNetwork(body={})
@@ -104,7 +105,7 @@ async def test_no_proxy_env_uses_the_pinned_transport() -> None:
     "no_proxy", ["kalshi.com", "api.elections.kalshi.com", "*", "x.test, kalshi.com"]
 )
 async def test_no_proxy_match_uses_the_pinned_transport(
-    monkeypatch, no_proxy: str
+    monkeypatch: pytest.MonkeyPatch, no_proxy: str
 ) -> None:
     monkeypatch.setenv("HTTPS_PROXY", PROXY)
     monkeypatch.setenv("NO_PROXY", no_proxy)
@@ -113,14 +114,18 @@ async def test_no_proxy_match_uses_the_pinned_transport(
     _assert_direct(net, lookups, transport)
 
 
-async def test_http_proxy_does_not_apply_to_the_https_api(monkeypatch) -> None:
+async def test_http_proxy_does_not_apply_to_the_https_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("HTTP_PROXY", PROXY)
     net = FakeNetwork(body={})
     (_, transport), lookups = await _get(net)
     _assert_direct(net, lookups, transport)
 
 
-async def test_trust_env_off_ignores_env_proxies(monkeypatch) -> None:
+async def test_trust_env_off_ignores_env_proxies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("HTTPS_PROXY", PROXY)
     net = FakeNetwork(body={})
     (_, transport), lookups = await _get(net, trust_env=False)
@@ -177,7 +182,7 @@ def _httpx_answer(url: str) -> str | None:
 @pytest.mark.parametrize("proxies", _PROXIES)
 @pytest.mark.parametrize("no_proxy", _NO_PROXY)
 def test_environment_proxy_for_matches_httpx(
-    monkeypatch, proxies: dict[str, str], no_proxy: str | None
+    monkeypatch: pytest.MonkeyPatch, proxies: dict[str, str], no_proxy: str | None
 ) -> None:
     for name, value in proxies.items():
         monkeypatch.setenv(name, value)
@@ -190,7 +195,7 @@ def test_environment_proxy_for_matches_httpx(
 # ---- The PDF and drift fetches stay pinned and unproxied --------------------------------
 
 
-async def test_pdf_fetch_ignores_env_proxies(monkeypatch) -> None:
+async def test_pdf_fetch_ignores_env_proxies(monkeypatch: pytest.MonkeyPatch) -> None:
     from mcp_server_kalshi.kalshi_client import pdf as pdf_module
 
     monkeypatch.setenv("HTTPS_PROXY", PROXY)
@@ -201,7 +206,9 @@ async def test_pdf_fetch_ignores_env_proxies(monkeypatch) -> None:
     assert net.connects == [(V4, 443)]
 
 
-def test_drift_fetch_ignores_env_proxies(monkeypatch, tmp_path) -> None:
+def test_drift_fetch_ignores_env_proxies(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from scripts.check_openapi_drift import check_drift
 
     monkeypatch.setenv("HTTPS_PROXY", PROXY)

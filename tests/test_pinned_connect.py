@@ -8,7 +8,8 @@ count. No network is touched.
 """
 
 import inspect
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import httpcore
 import httpx
@@ -30,7 +31,7 @@ V6 = "2606:4700::6812:1"
 V4 = "104.18.0.1"
 
 
-def _assert_pinned(net: FakeNetwork, dns, host: str) -> None:
+def _assert_pinned(net: FakeNetwork, dns: MagicMock, host: str) -> None:
     """One lookup of ``host``; one connect, to the checked IP; hostname on the wire."""
     assert [c.args[0] for c in dns.call_args_list] == [host]
     assert net.connects == [(V4, 443)]
@@ -62,7 +63,7 @@ async def test_pdf_fetch_connects_to_checked_ip() -> None:
     _assert_pinned(net, dns, "kalshi-public-docs.s3.amazonaws.com")
 
 
-def test_drift_fetch_connects_to_checked_ip(tmp_path) -> None:
+def test_drift_fetch_connects_to_checked_ip(tmp_path: Path) -> None:
     spec = {"paths": {"/exchange/status": {"get": {"parameters": []}}}}
     net = FakeNetwork(body=spec)
     client = tmp_path / "client.py"
@@ -81,7 +82,7 @@ def test_drift_fetch_connects_to_checked_ip(tmp_path) -> None:
     _assert_pinned(net, dns, "docs.kalshi.com")
 
 
-def test_drift_fetch_does_not_follow_redirects(tmp_path) -> None:
+def test_drift_fetch_does_not_follow_redirects(tmp_path: Path) -> None:
     """A 302 from the checked docs host fails the fetch; the Location is never requested."""
     net = FakeNetwork(status=302)
     net.response = (
