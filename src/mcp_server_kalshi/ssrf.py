@@ -12,6 +12,7 @@ import contextvars
 import ipaddress
 import re
 import socket
+import ssl
 from collections.abc import Collection, Iterable
 from typing import Any, cast
 from urllib.parse import urlsplit, urlunsplit
@@ -315,12 +316,10 @@ async def avalidate_spec_url(url: str) -> str:
 
 
 # ---- Connect to the checked IP --------------------------------------------------------
-# Ported from the template's SSRFSafeAsyncTransport (template_mcp/client.py:83), which
-# re-validates DNS on each request. That alone still lets httpcore resolve the name a
-# second time when it connects, so this version also pins the connect: the transport
-# hands httpcore the addresses that passed the check, and the network backend dials one
-# of them. The URL keeps the hostname, so the Host header, SNI and certificate
-# verification all use the original name.
+# The transport checks the host once per request and hands httpcore the addresses that
+# passed; the network backend dials one of them, so httpcore never resolves the name
+# again. The URL keeps the hostname, so the Host header, SNI and certificate
+# verification all use the original name, and httpcore pools connections per hostname.
 
 _CHECKED_IPS: contextvars.ContextVar[dict[str, tuple[str, ...]] | None] = (
     contextvars.ContextVar("kalshi_checked_ips", default=None)
@@ -383,7 +382,7 @@ class _PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
         assert last is not None
         raise last
 
-    async def connect_unix_socket(  # pragma: no cover - never used by these clients
+    async def connect_unix_socket(
         self,
         path: str,
         timeout: float | None = None,
@@ -400,20 +399,62 @@ class SSRFSafeAsyncTransport(httpx.AsyncHTTPTransport):
 
     If the caller just validated the host (``avalidate_*``), those addresses are used;
     otherwise the transport runs the same check itself. Either way there is exactly one
-    lookup per request and httpcore never resolves the name again.
+    lookup per request. The connection pool is built with a network backend that dials
+    only those addresses, in resolver order, so a second DNS answer cannot send the
+    request somewhere unchecked. A host with no checked address is refused at connect.
+    Proxies and Unix sockets are not supported: both would bypass the pin. httpx
+    ignores environment proxies whenever a transport is passed in, so every client
+    built on this transport connects directly.
     """
 
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self._pool._network_backend = _PinnedNetworkBackend()
+    def __init__(
+        self,
+        verify: ssl.SSLContext | str | bool = True,
+        cert: Any = None,
+        trust_env: bool = True,
+        http1: bool = True,
+        http2: bool = False,
+        limits: httpx.Limits | None = None,
+        retries: int = 0,
+        local_address: str | None = None,
+        socket_options: Iterable[Any] | None = None,
+    ) -> None:
+        limits = limits or httpx.Limits(
+            max_connections=100, max_keepalive_connections=20
+        )
+        ssl_context = httpx.create_ssl_context(
+            verify=verify, cert=cert, trust_env=trust_env
+        )
+        super().__init__(verify=ssl_context, limits=limits)
+        # httpcore documents ``network_backend`` as a public AsyncConnectionPool argument
+        # (https://www.encode.io/httpcore/network-backends/). httpx.AsyncHTTPTransport
+        # does not take one, so the pool it serves requests through is rebuilt here with
+        # the same settings plus the pinned backend.
+        self._pool = httpcore.AsyncConnectionPool(
+            ssl_context=ssl_context,
+            max_connections=limits.max_connections,
+            max_keepalive_connections=limits.max_keepalive_connections,
+            keepalive_expiry=limits.keepalive_expiry,
+            http1=http1,
+            http2=http2,
+            retries=retries,
+            local_address=local_address,
+            socket_options=socket_options,
+            network_backend=_PinnedNetworkBackend(),
+        )
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        host = request.url.host
-        ips = _take_checked(host)
+        """Check the destination off the event loop, then connect only to a checked address."""
+        # httpcore dials, and TLS checks, the ASCII (IDNA) form of the host, so the check
+        # resolves that same name and the pin is keyed by it.
+        hostname = request.url.raw_host.decode("ascii")
+        if not hostname:
+            return await super().handle_async_request(request)
+        ips = _take_checked(hostname)
         if ips is None:
-            ips = await _assert_public_dns(host)
-            _take_checked(host)
-        token = _PINNED_IPS.set({host.lower(): ips})
+            ips = await _assert_public_dns(hostname)
+            _take_checked(hostname)
+        token = _PINNED_IPS.set({hostname.lower(): ips})
         try:
             return await super().handle_async_request(request)
         finally:

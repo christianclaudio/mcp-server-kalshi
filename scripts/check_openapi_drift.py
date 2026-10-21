@@ -245,7 +245,14 @@ def load_allowlist(allowlist_file: Path) -> set[tuple[str, str]]:
 
 
 async def fetch_spec_text(spec_url: str) -> str:
-    """Check the spec URL, then GET it from the checked address (no redirects)."""
+    """Check the spec URL, then GET it from the checked address (no redirects).
+
+    The transport connects only to an address that passed the check, keeping the
+    hostname for the Host header, TLS SNI and certificate verification. httpx ignores
+    ``HTTP(S)_PROXY`` / ``ALL_PROXY`` whenever a transport is passed in, so the fetch
+    always connects directly, through the pin, and an environment proxy is never used.
+    ``trust_env=False`` is belt-and-braces.
+    """
     safe_url = await avalidate_spec_url(spec_url)
     async with httpx.AsyncClient(
         timeout=15.0,

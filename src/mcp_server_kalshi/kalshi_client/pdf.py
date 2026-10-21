@@ -14,7 +14,11 @@ MAX_PDF_REDIRECTS = 3
 
 
 async def _download_pdf(url: str) -> tuple[str, bytes]:
-    """GET a PDF without env proxies, re-checking every redirect target."""
+    """GET a PDF from a checked address, re-checking every redirect target.
+
+    httpx ignores environment proxies whenever a transport is passed in, so the fetch
+    connects directly through the pin; ``trust_env=False`` is belt-and-braces.
+    """
     current = await avalidate_pdf_url(url)
     async with httpx.AsyncClient(
         timeout=30,

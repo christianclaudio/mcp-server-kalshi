@@ -56,6 +56,9 @@ gh attestation verify oci://ghcr.io/christianclaudio/mcp-server-kalshi:<version>
 
 The attest job runs after the GitHub Release and the GHCR push, so a failed attestation does not undo them. If the MCP Registry job is ever enabled, it waits for `attest`, so a failed attestation blocks the registry publish.
 
+### 6. Outbound Connections and Proxies
+Every outbound request (the Kalshi API, rules PDFs and the drift monitor's spec fetch) connects only to an address that passed the private, loopback, link-local and metadata check for its allowlisted host. httpx ignores `HTTP(S)_PROXY` / `ALL_PROXY` whenever a transport is passed in (httpx `AsyncClient`: `allow_env_proxies = trust_env and transport is None`), so these requests always connect directly, through the checked-address pin; an environment proxy is never used. Deployments that require an egress proxy need a proxy-aware transport, which this server does not provide. `trust_env=False` on the PDF and drift fetches is belt-and-braces.
+
 ## 🛡️ Summary of Deployment Postures
 
 | Use Case | Recommended Configuration |
