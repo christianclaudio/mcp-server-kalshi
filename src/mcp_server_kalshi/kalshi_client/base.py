@@ -9,7 +9,13 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519, padding, rsa
 
 from ..errors import KalshiAPIError
-from ..ssrf import avalidate_api_base_url, validate_api_base_url
+from ..ssrf import (
+    SSRFSafeAsyncTransport,
+    avalidate_api_base_url,
+    discard_checked,
+    environment_proxy_for,
+    validate_api_base_url,
+)
 
 # Parsed key object, not the PEM banner. PKCS#8 RSA and Ed25519 both use
 # "BEGIN PRIVATE KEY".
@@ -26,7 +32,7 @@ def load_private_key_from_file(file_path: str) -> KalshiPrivateKey:
         private_key = serialization.load_pem_private_key(
             key_file.read(), password=None, backend=default_backend()
         )
-    if isinstance(private_key, (rsa.RSAPrivateKey, ed25519.Ed25519PrivateKey)):
+    if isinstance(private_key, rsa.RSAPrivateKey | ed25519.Ed25519PrivateKey):
         return private_key
     raise ValueError(
         f"Expected an RSA or Ed25519 private key in {file_path}, "
@@ -103,6 +109,13 @@ class BaseAPIClient:
     provided every request is signed with that key (RSA-PSS or Ed25519); otherwise
     requests are sent unsigned, which is fine for public market-data endpoints.
     Authenticated endpoints raise a clear error if creds are missing.
+
+    Every request first passes the hostname check (allowlist plus a DNS answer with no
+    private, loopback, link-local or metadata address). With ``trust_env`` on (the
+    default, as in httpx), an ``HTTP(S)_PROXY`` / ``ALL_PROXY`` that applies to the base
+    URL after ``NO_PROXY`` is honored through httpx's own proxied transport; the proxy
+    resolves the name, so the checked-address pin does not apply on that path. Otherwise
+    requests go through ``SSRFSafeAsyncTransport`` and connect only to a checked address.
     """
 
     def __init__(
@@ -111,9 +124,12 @@ class BaseAPIClient:
         api_key: str | None = None,
         private_key_path: str | None = None,
         timeout: int = 30,
+        trust_env: bool = True,
     ) -> None:
         self._base_url: str = validate_api_base_url(base_url)
         self._timeout: int = timeout
+        self._trust_env: bool = trust_env
+        self._proxied: bool = False
         self._api_key: str | None = api_key
         self._private_key: KalshiPrivateKey | None = (
             load_private_key_from_file(private_key_path) if private_key_path else None
@@ -133,11 +149,25 @@ class BaseAPIClient:
                 if self._private_key is not None and self._api_key is not None
                 else None
             )
-            self._client = httpx.AsyncClient(
-                timeout=self._timeout,
-                auth=auth,
-                headers={"Content-Type": "application/json"},
-            )
+            proxy = environment_proxy_for(self._base_url) if self._trust_env else None
+            if proxy is not None:
+                # httpx's normal proxied transport, as when no transport is passed in.
+                self._proxied = True
+                self._client = httpx.AsyncClient(
+                    timeout=self._timeout,
+                    auth=auth,
+                    headers={"Content-Type": "application/json"},
+                    trust_env=self._trust_env,
+                    proxy=proxy,
+                )
+            else:
+                self._client = httpx.AsyncClient(
+                    timeout=self._timeout,
+                    auth=auth,
+                    headers={"Content-Type": "application/json"},
+                    trust_env=self._trust_env,
+                    transport=SSRFSafeAsyncTransport(),
+                )
         return self._client
 
     def _require_auth(self) -> None:
@@ -159,6 +189,9 @@ class BaseAPIClient:
         # is awaited so it does not block the event loop.
         self._base_url = await avalidate_api_base_url(self._base_url)
         client = self._ensure_client()
+        if self._proxied:
+            # No pinned connect consumes the check on the proxied path.
+            discard_checked(httpx.URL(self._base_url).host)
         url = self._base_url + path
         response = await client.request(method, url, params=params, json=json)
         if response.is_error:
@@ -174,8 +207,13 @@ class BaseAPIClient:
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         return await self._request("GET", path, params=params)
 
-    async def post(self, path: str, json: dict[str, Any] | None = None) -> Any:
-        return await self._request("POST", path, json=json)
+    async def post(
+        self,
+        path: str,
+        json: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        return await self._request("POST", path, params=params, json=json)
 
     async def delete(
         self,

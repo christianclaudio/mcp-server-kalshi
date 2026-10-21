@@ -1,3 +1,15 @@
+---
+vcs:
+  system: github
+  remote: https://github.com/christianclaudio/mcp-server-kalshi
+  owner: christianclaudio
+  repo: mcp-server-kalshi
+  default_branch: main
+  branch_policy: pr_only
+  merge_method: squash
+  delete_branch_on_merge: true
+---
+
 # AGENTS.md
 
 Instructions for AI coding agents (Antigravity, Claude Code, Copilot, Cursor, Windsurf) working on this repository or integrating Kalshi prediction market capabilities.
@@ -11,7 +23,7 @@ This is `mcp-server-kalshi` — an enterprise Model Context Protocol (MCP) serve
 **Lineage & Purpose**:
 - **Upstream Origin**: Maintained by christianclaudio as an enterprise-hardened fork of `9crusher/mcp-server-kalshi`.
 - **Primary Function**: Built for deep end-to-end trading workflows (market discovery → candidate research → legal settlement rules extraction → order simulation/placement).
-- **Core Stack**: Python 3.10+, `uv`, `fastmcp>=4.1.1` + `mcp>=2.3.0` (FastMCP 4 engine, lifespan management, host & origin protection, Spec 2026-07-28), `httpx` (async connection pooling & retry engine), `pydantic` v2, and `cryptography` (RSA-PSS and Ed25519 signing).
+- **Core Stack**: Python 3.10+, `uv` (0.13.4 or later), `fastmcp>=4.1.3` + `mcp>=2.3.0` (FastMCP 4 engine, lifespan management, host & origin protection, Spec 2026-07-28), `httpx` (async connection pooling & retry engine), `pydantic` v2, and `cryptography` (RSA-PSS and Ed25519 signing).
 - **Distribution**: Install from git or `ghcr.io/christianclaudio/mcp-server-kalshi`. This fork does not publish to public PyPI or the MCP Registry. Upstream owns the public package name `mcp-server-kalshi` and registry id `io.github.9crusher/mcp-server-kalshi`.
 
 ---
@@ -23,7 +35,7 @@ Data flows: request → Pydantic schema validation → API client → FastMCP 4 
 Key paths:
 - `src/mcp_server_kalshi/server.py` — `ToolRegistry`, every tool handler, FastMCP 4 engine, lifespan, streamable HTTP bridge.
 - `src/mcp_server_kalshi/kalshi_client/` — `base.py` (async httpx `BaseAPIClient`, `KalshiAuth` RSA-PSS/Ed25519 signing, `KalshiAPIError`), `client.py` (`KalshiAPIClient` endpoints + `build_*_order_payload` translators), `schemas.py` (Pydantic request models), `pdf.py` (contract-terms PDF text).
-- `src/mcp_server_kalshi/config.py` — Pydantic Settings; safety default `KALSHI_ENV=demo`. `ssrf.py` — allowlist and private-range checks for API base and PDF URLs. `auth.py` — `KALSHI_MCP_AUTH_TOKEN` bearer verifier (`SharedTokenVerifier`, attached when `server.py` builds `mcp`) and the strict `KALSHI_MCP_ALLOW_UNAUTHENTICATED_BIND` opt-in; `main()` refuses a tokenless HTTP bind to a non-localhost host with exit code 2.
+- `src/mcp_server_kalshi/config.py` — Pydantic Settings; safety default `KALSHI_ENV=demo`. `ssrf.py` — allowlist and private-range checks for API base, PDF, and OpenAPI spec URLs (the drift script fetches only `https://docs.kalshi.com` after a DNS check); `SSRFSafeAsyncTransport` connects only to an address that passed that check, trying the next checked address if a connect fails, and keeps the hostname for the Host header, TLS SNI, certificate verification and per-hostname connection pooling. The API client honors environment proxies as it did before the pin: when `HTTP(S)_PROXY` / `ALL_PROXY` applies to the base URL after `NO_PROXY` (`ssrf.environment_proxy_for`, the same resolution httpx uses on the public `urllib.request.getproxies()`), it uses httpx's own proxied transport. Pinning doesn't apply through a proxy, because the proxy resolves the name; the hostname check still runs first. Otherwise it uses the pinned transport. The PDF fetch and the drift fetch always connect directly through the pin and never use an environment proxy: they pass the transport (httpx then ignores env proxies: `allow_env_proxies = trust_env and transport is None`) and set `trust_env=False`. `auth.py` — `KALSHI_MCP_AUTH_TOKEN` bearer verifier (`SharedTokenVerifier`, attached when `server.py` builds `mcp`) and the strict `KALSHI_MCP_ALLOW_UNAUTHENTICATED_BIND` opt-in; `main()` refuses a tokenless HTTP bind to a non-localhost host with exit code 2.
 - `scripts/check_tool_contract.py` — source of truth for the expected tool set and annotations. Do not hard-code tool counts elsewhere.
 - `scripts/check_openapi_drift.py`, `scripts/check_conformance.sh` + `conformance-baseline.yml`.
 - `scripts/release_notes.py` — release body from squash commits since the previous `v*` tag. `scripts/check_version.py` — runs after the build and reads the version from the single wheel in `dist/` (the file that ships, as release.yml's tag check does); fails on `0.0.0` (no git metadata) or `0.0.1.devN` (no reachable tag, a shallow checkout).
@@ -97,6 +109,8 @@ When translating an API endpoint or Kalshi documentation into an MCP tool, follo
 
 ## 🛠️ Development & Verification Commands
 
+uv 0.13.4 or later is required (`[tool.uv] required-version` in `pyproject.toml`, from FastMCP's [certificate authority incident notice (October 2026)](https://github.com/PrefectHQ/fastmcp/blob/main/SECURITY.md#certificate-authority-incident-october-2026)); older uv refuses to run, and CI's `setup-uv` installs from that setting. The same notice sets the other trust-store floors: `certifi>=2026.10.19` is a direct dependency, both `Dockerfile` stages upgrade the OS `ca-certificates` package and fail the build below Debian trixie's patched `20250419+deb13u1` (`ARG CA_CERTIFICATES_FLOOR`, declared once), the builder does so before any pip runs because pip trusts the OS store as well as its bundled certifi, the builder bootstraps pip 26.2.2, and `release.yml` upgrades its build pip to `pip>=26.2.2`. `tests/test_dockerfile.py` and CI's `docker-build` job enforce the order and the floor. The pip bootstrap is hash-pinned in `docker/pip-bootstrap.txt` and installed with `--require-hashes`, so it does not depend on the TLS trust of the base image's older pip and certifi; whoever raises the pip floor updates that pin and its sha256 from PyPI (`https://pypi.org/pypi/pip/<version>/json`, the `py3-none-any` wheel's `digests.sha256`), because Dependabot does not track the file. Lowering `CA_CERTIFICATES_FLOOR` with `--build-arg` is unsupported; the build-arg exists only so CI's `docker-build` job can raise it for the negative floor check, and CI and the release workflow never pass it otherwise.
+
 ```bash
 # Install editable with dev dependencies (matches the locked CI resolve)
 uv sync --locked --extra dev
@@ -136,7 +150,7 @@ coderabbit review --agent --uncommitted
 
 ## 🔄 CI & Releases
 
-CI is defined in `.github/workflows/ci.yml` (Ruff lint and format, Black, mypy, tests on Python 3.10–3.14 at 100% coverage, tool contract, OpenAPI drift, build + `scripts/check_version.py` + `twine check`, conformance) and installs with `uv sync --locked --all-extras`. Jobs that install or build the package check out with `fetch-depth: 0`, because a shallow checkout has no reachable tag and reports `0.0.1.devN`. The Docker build context has no `.git`, so `release.yml` passes the tag version as `UV_DYNAMIC_VERSIONING_BYPASS`. CI runs on pushes to `main` and `feat/*`, on pull requests to `main`, daily on `main` at 09:13 UTC (`schedule`), and on manual dispatch (`workflow_dispatch`); the daily run exists because merges by `dependabot-automerge.yml` use `GITHUB_TOKEN` and so never trigger the `push` run. Run all of these before opening a PR. Scheduled drift checks live in `kalshi-drift-monitor.yml`: it captures the drift check's exit code explicitly, and on a non-zero exit opens a `forge-todo` issue (titled as drift only when the check reported drift; otherwise "drift monitor failed") and fails the run.
+CI is defined in `.github/workflows/ci.yml` (Ruff lint and format, Black, mypy, tests on Python 3.10–3.14 at 100% coverage, tool contract, OpenAPI drift, build + `scripts/check_version.py` + `twine check`, `docker-build` (checks that the Dockerfile's builder stage fails at its `ca-certificates` floor check, before any pip step, when the floor is above the installed version), conformance) and installs with `uv sync --locked --all-extras`. Jobs that install or build the package check out with `fetch-depth: 0`, because a shallow checkout has no reachable tag and reports `0.0.1.devN`. The Docker build context has no `.git`, so `release.yml` passes the tag version as `UV_DYNAMIC_VERSIONING_BYPASS`. CI runs on pushes to `main` and `feat/*`, on pull requests to `main`, daily on `main` at 09:13 UTC (`schedule`), and on manual dispatch (`workflow_dispatch`); the daily run exists because merges by `dependabot-automerge.yml` use `GITHUB_TOKEN` and so never trigger the `push` run. Run all of these before opening a PR. Scheduled drift checks live in `kalshi-drift-monitor.yml`: it captures the drift check's exit code explicitly, and on a non-zero exit opens a `forge-todo` issue (titled as drift only when the check reported drift; otherwise "drift monitor failed") and fails the run.
 
 A `v*` tag runs `.github/workflows/release.yml`: build the wheel with full history, check the wheel's version matches the tag, `twine check`, write a CycloneDX SBOM, build the release notes, create the GitHub Release (notes, wheel, sdist, SBOM), and only then publish the Docker image to `ghcr.io/christianclaudio/mcp-server-kalshi` (`:X.Y.Z` and `:latest`). The PyPI step and the MCP Registry job stay commented out: upstream owns the public PyPI name `mcp-server-kalshi` and the registry id `io.github.9crusher/mcp-server-kalshi`. There is no `deploy.yml`. Do not publish this fork to public PyPI or the MCP Registry.
 

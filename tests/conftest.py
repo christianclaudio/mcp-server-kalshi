@@ -11,6 +11,7 @@ Two building blocks used across the new tests:
   assert wiring without touching the network.
 """
 
+import ipaddress
 import json
 import os
 import socket
@@ -107,6 +108,86 @@ def _clear_http_auth(monkeypatch):
     monkeypatch.delenv(AUTH_TOKEN_ENV, raising=False)
     monkeypatch.delenv(ALLOW_UNAUTHENTICATED_BIND_ENV, raising=False)
     monkeypatch.setattr(server_mod.mcp, "auth", None)
+
+
+class RealNetworkConnectError(AssertionError):
+    """An offline test tried to open a real network connection."""
+
+
+def _is_loopback_address(address: object) -> bool:
+    """True for a Unix-socket path or a literal 127.0.0.0/8 or ::1 address."""
+    if isinstance(address, str | bytes):
+        return True  # AF_UNIX path
+    if not isinstance(address, tuple) or not address:
+        return False
+    host = address[0]
+    if isinstance(host, bytes):
+        host = host.decode("ascii", "replace")
+    try:
+        return ipaddress.ip_address(str(host).split("%", 1)[0]).is_loopback
+    except ValueError:
+        return False  # a hostname: refused rather than resolved
+
+
+@pytest.fixture(autouse=True)
+def _no_real_network_connects(monkeypatch, request):
+    """Fail any offline test that opens a connection off this machine.
+
+    Every outbound path in the unit tests runs over ``tests/fake_network.py``,
+    ``httpx.MockTransport`` or a mock. A connect that reaches the real socket layer
+    (``socket.socket.connect`` / ``connect_ex``, which asyncio and anyio also use, or
+    ``socket.create_connection``) raises instead of dialing, unless it targets a literal
+    loopback address or a Unix socket (the HTTP tests serve on 127.0.0.1). Live ``e2e``
+    tests opt out.
+    """
+    if request.node.get_closest_marker("e2e"):
+        return
+    real_connect = socket.socket.connect
+    real_connect_ex = socket.socket.connect_ex
+    real_create_connection = socket.create_connection
+
+    def _check(address: object) -> None:
+        if not _is_loopback_address(address):
+            raise RealNetworkConnectError(
+                f"offline test tried a real network connect to {address!r}"
+            )
+
+    def connect(self, address):
+        _check(address)
+        return real_connect(self, address)
+
+    def connect_ex(self, address):
+        _check(address)
+        return real_connect_ex(self, address)
+
+    def create_connection(address, *args, **kwargs):
+        _check(address)
+        return real_create_connection(address, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
+    monkeypatch.setattr(socket, "create_connection", create_connection)
+
+
+PROXY_ENV = tuple(
+    name
+    for base in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY")
+    for name in (base, base.lower())
+)
+
+
+@pytest.fixture(autouse=True)
+def _clear_proxy_env(monkeypatch, request):
+    """Start every offline test with no proxy in the environment.
+
+    The API client honors ``HTTP(S)_PROXY`` / ``ALL_PROXY`` / ``NO_PROXY``, so a proxy
+    exported in the developer's shell would change which transport the client tests get.
+    Tests that need one set it with ``monkeypatch.setenv``. Live ``e2e`` tests opt out.
+    """
+    if request.node.get_closest_marker("e2e"):
+        return
+    for name in PROXY_ENV:
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture(autouse=True)

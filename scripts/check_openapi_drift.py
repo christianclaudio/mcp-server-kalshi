@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import asyncio
 import re
 import sys
 from dataclasses import dataclass, field
@@ -18,6 +19,12 @@ from typing import Any
 
 import httpx
 import yaml
+
+from mcp_server_kalshi.ssrf import (
+    SSRFSafeAsyncTransport,
+    UnsafeURLError,
+    avalidate_spec_url,
+)
 
 REPO = Path(__file__).resolve().parent.parent
 CLIENT_PATH = REPO / "src" / "mcp_server_kalshi" / "kalshi_client" / "client.py"
@@ -237,6 +244,28 @@ def load_allowlist(allowlist_file: Path) -> set[tuple[str, str]]:
     return allowed
 
 
+async def fetch_spec_text(spec_url: str) -> str:
+    """Check the spec URL, then GET it from the checked address (no redirects).
+
+    The transport connects only to an address that passed the check, keeping the
+    hostname for the Host header, TLS SNI and certificate verification. This is a CI
+    script, so it stays pinned and unproxied: httpx ignores ``HTTP(S)_PROXY`` /
+    ``ALL_PROXY`` whenever a transport is passed in, and ``trust_env=False`` turns them
+    off as well, so the fetch always connects directly to the checked address. A
+    redirect is not followed; it fails the fetch.
+    """
+    safe_url = await avalidate_spec_url(spec_url)
+    async with httpx.AsyncClient(
+        timeout=15.0,
+        follow_redirects=False,
+        trust_env=False,
+        transport=SSRFSafeAsyncTransport(),
+    ) as client:
+        resp = await client.get(safe_url)
+        resp.raise_for_status()
+        return resp.text
+
+
 def check_drift(
     spec_url: str = DEFAULT_SPEC_URL,
     local_spec: Path | None = None,
@@ -255,9 +284,15 @@ def check_drift(
             raw = yaml.safe_load(local_spec.read_text(encoding="utf-8"))
         else:
             print(f"[*] Fetching live spec from: {spec_url}")
-            resp = httpx.get(spec_url, timeout=15.0)
-            resp.raise_for_status()
-            raw = yaml.safe_load(resp.text)
+            try:
+                # https only, docs.kalshi.com only, and the name must not resolve to a
+                # private, loopback, link-local or metadata address. Checked before the GET,
+                # and the GET connects to the address that passed, with no second lookup.
+                text = asyncio.run(fetch_spec_text(spec_url))
+            except UnsafeURLError as exc:
+                print(f"[!] Refused to fetch spec URL: {exc}")
+                return 2
+            raw = yaml.safe_load(text)
     except Exception as exc:
         print(f"[!] Failed to acquire OpenAPI specification: {exc}")
         return 1
@@ -339,7 +374,9 @@ def main() -> int:
         description="Check Kalshi API OpenAPI drift and parameter deprecations."
     )
     parser.add_argument(
-        "--spec-url", default=DEFAULT_SPEC_URL, help="URL to OpenAPI YAML/JSON."
+        "--spec-url",
+        default=DEFAULT_SPEC_URL,
+        help="URL to OpenAPI YAML/JSON. Must be https on docs.kalshi.com.",
     )
     parser.add_argument(
         "--local-spec", type=Path, default=None, help="Path to local OpenAPI YAML/JSON."

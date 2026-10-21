@@ -32,7 +32,7 @@ graph TD
 - **Exchange & Status** — `get_exchange_status`, `get_exchange_schedule`, `get_environment`.
 - **Portfolio & Exposure** — `get_balance`, `get_total_resting_order_value` (FCM members only; regular accounts get 403), `get_positions`, `get_fills`, `get_settlements`.
 - **Trading & Execution** — `create_order`, `cancel_order`, `amend_order`, `decrease_order`, `batch_create_orders`, `batch_cancel_orders`, `list_orders`, `get_order`.
-- **Risk Management & Order Groups** — `list_order_groups`, `cancel_order_group` (groups that cancel their orders when a rolling 15-second contracts limit is hit).
+- **Risk Management & Order Groups** — `list_order_groups`, `cancel_order_group` (groups that cancel their orders when a rolling 15-second contracts limit is hit). `list_order_groups` keeps its `limit` and `cursor` inputs for compatibility, though Kalshi's OpenAPI spec (v3.34.0) documents only `subaccount` on that endpoint.
 
 ---
 
@@ -54,7 +54,7 @@ graph TD
 | `KALSHI_API_KEY` / `KALSHI_API_KEY_ID` | _(none)_ | Kalshi API key ID. Required for portfolio and order tools. |
 | `KALSHI_PRIVATE_KEY_PATH` | _(none)_ | Path to your RSA or Ed25519 private key `.pem`. |
 | `KALSHI_READONLY` | `0` / `false` | When enabled (`1`), disables all mutating order endpoints at startup. |
-| `BASE_URL` | _(derived)_ | Optional REST override. Only `https://demo-api.kalshi.co/trade-api/v2` or `https://api.elections.kalshi.com/trade-api/v2`. |
+| `BASE_URL` | _(derived)_ | Optional REST override. Only `https://demo-api.kalshi.co/trade-api/v2`, `https://api.elections.kalshi.com/trade-api/v2`, or Kalshi's dedicated hosts: production `https://external-api.kalshi.com/trade-api/v2` and demo `https://external-api.demo.kalshi.co/trade-api/v2` ([changelog, May 7, 2026](https://docs.kalshi.com/changelog)). With no override, the server keeps using the shared hosts (`api.elections.kalshi.com` for `KALSHI_ENV=prod`, `demo-api.kalshi.co` for demo), which Kalshi still supports. The dedicated demo host reports as DEMO. |
 
 ---
 

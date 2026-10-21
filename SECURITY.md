@@ -56,6 +56,9 @@ gh attestation verify oci://ghcr.io/christianclaudio/mcp-server-kalshi:<version>
 
 The attest job runs after the GitHub Release and the GHCR push, so a failed attestation does not undo them. If the MCP Registry job is ever enabled, it waits for `attest`, so a failed attestation blocks the registry publish.
 
+### 6. Outbound Connections and Proxies
+Every outbound request (the Kalshi API, rules PDFs and the drift monitor's spec fetch) first passes the private, loopback, link-local and metadata check for its allowlisted host, and a direct connection goes only to an address that passed it. Environment proxies are honored for the API client: when `HTTP(S)_PROXY` / `ALL_PROXY` applies to the Kalshi base URL after `NO_PROXY`, requests go through httpx's proxied transport. Pinning doesn't apply through a proxy, because the proxy resolves the name; the hostname check (allowlist and DNS answer) still runs first, before every request. Without an applicable proxy, requests connect only to a checked address. The PDF fetch and the drift fetch never use an environment proxy: they pass the pinned transport, which makes httpx ignore env proxies, and set `trust_env=False`.
+
 ## 🛡️ Summary of Deployment Postures
 
 | Use Case | Recommended Configuration |

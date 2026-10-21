@@ -48,6 +48,7 @@ from mcp_server_kalshi.kalshi_client.schemas import (
     DecreaseOrderRequest,
     EmptyRequest,
     FetchRulesPdfRequest,
+    GetBalanceRequest,
     GetEventLiveDataRequest,
     GetEventRequest,
     GetFillsRequest,
@@ -74,7 +75,7 @@ from mcp_server_kalshi.kalshi_client.schemas import (
     ListSeriesRequest,
     MCPSchemaBaseModel,
 )
-from mcp_server_kalshi.ssrf import avalidate_pdf_url
+from mcp_server_kalshi.ssrf import validate_pdf_url
 
 
 def _background_info(env_label: str, is_production: bool) -> str:
@@ -465,7 +466,11 @@ async def handle_list_events(request: dict[str, Any]) -> Any:
 )
 async def handle_get_event(request: dict[str, Any]) -> Any:
     req = GetEventRequest(**request)
-    return await kalshi_client.get_event(req.event_ticker, req.with_nested_markets)
+    if req.exclude_markets is None:
+        return await kalshi_client.get_event(req.event_ticker, req.with_nested_markets)
+    return await kalshi_client.get_event(
+        req.event_ticker, req.with_nested_markets, exclude_markets=req.exclude_markets
+    )
 
 
 @ToolRegistry.register_tool(
@@ -510,7 +515,11 @@ async def handle_list_series(request: dict[str, Any]) -> Any:
 )
 async def handle_get_series(request: dict[str, Any]) -> Any:
     req = GetSeriesRequest(**request)
-    return await kalshi_client.get_series(req.series_ticker)
+    if req.include_volume is None:
+        return await kalshi_client.get_series(req.series_ticker)
+    return await kalshi_client.get_series(
+        req.series_ticker, include_volume=req.include_volume
+    )
 
 
 # =============================== Research / rules ============================
@@ -550,6 +559,7 @@ async def handle_get_market_candlesticks(request: dict[str, Any]) -> Any:
         end_ts=end_ts,
         period_interval=req.period_interval,
         series_ticker=req.series_ticker,
+        include_latest_before_start=req.include_latest_before_start,
     )
 
 
@@ -660,7 +670,8 @@ async def handle_fetch_rules_pdf(request: dict[str, Any]) -> Any:
                 f"contract_url={series.get('contract_url')}"
             )
         url = candidate
-    return await fetch_pdf_text(await avalidate_pdf_url(url))
+    # Shape check only; fetch_pdf_text runs the one DNS check and pins the connect.
+    return await fetch_pdf_text(validate_pdf_url(url))
 
 
 # =============================== Environment ================================
@@ -723,14 +734,17 @@ async def handle_get_exchange_schedule(request: dict[str, Any]) -> Any:
 @ToolRegistry.register_tool(
     name="get_balance",
     description="Get your account balance and portfolio value (authenticated).",
-    input_schema=EmptyRequest,
+    input_schema=GetBalanceRequest,
     read_only=True,
     destructive=False,
     idempotent=True,
     open_world=False,
 )
 async def handle_get_balance(request: dict[str, Any]) -> Any:
-    return await kalshi_client.get_balance()
+    params = _params(request, GetBalanceRequest)
+    if not params:
+        return await kalshi_client.get_balance()
+    return await kalshi_client.get_balance(params)
 
 
 @ToolRegistry.register_tool(
@@ -851,6 +865,10 @@ async def handle_create_order(request: dict[str, Any]) -> Any:
         reduce_only=req.reduce_only,
         client_order_id=req.client_order_id or str(uuid.uuid4()),
         expiration_ts=req.expiration_ts,
+        order_group_id=req.order_group_id,
+        cancel_order_on_pause=req.cancel_order_on_pause,
+        subaccount=req.subaccount,
+        exchange_index=req.exchange_index,
     )
     if not req.confirm:
         return _order_preview(req, payload)
@@ -877,6 +895,7 @@ async def handle_create_order(request: dict[str, Any]) -> Any:
 )
 async def handle_cancel_order(request: dict[str, Any]) -> Any:
     req = CancelOrderRequest(**request)
+    query = _params(request, CancelOrderRequest, drop=("order_id", "confirm"))
     if not req.confirm:
         return {
             "preview": True,
@@ -887,8 +906,11 @@ async def handle_cancel_order(request: dict[str, Any]) -> Any:
             "environment": settings.env_label,
             "order_id": req.order_id,
             "confirm_required": True,
+            **({"query": query} if query else {}),
         }
-    return await kalshi_client.cancel_order(req.order_id)
+    if not query:
+        return await kalshi_client.cancel_order(req.order_id)
+    return await kalshi_client.cancel_order(req.order_id, query)
 
 
 @ToolRegistry.register_tool(
@@ -912,7 +934,11 @@ async def handle_amend_order(request: dict[str, Any]) -> Any:
         count=req.count,
         limit_price_cents=req.limit_price,
         updated_client_order_id=req.updated_client_order_id,
+        client_order_id=req.client_order_id,
+        expiration_time=req.expiration_time,
+        exchange_index=req.exchange_index,
     )
+    query = {"subaccount": req.subaccount} if req.subaccount is not None else None
     if not req.confirm:
         return {
             "preview": True,
@@ -923,8 +949,12 @@ async def handle_amend_order(request: dict[str, Any]) -> Any:
             "environment": settings.env_label,
             "kalshi_v2_payload": payload,
             "confirm_required": True,
+            **({"query": query} if query else {}),
         }
-    result = await kalshi_client.amend_order(req.order_id, payload)
+    if query is None:
+        result = await kalshi_client.amend_order(req.order_id, payload)
+    else:
+        result = await kalshi_client.amend_order(req.order_id, payload, query)
     return {"amended": True, "environment": settings.env_label, "result": result}
 
 
@@ -942,7 +972,13 @@ async def handle_amend_order(request: dict[str, Any]) -> Any:
 )
 async def handle_decrease_order(request: dict[str, Any]) -> Any:
     req = DecreaseOrderRequest(**request)
-    payload = build_decrease_order_payload(req.reduce_by, req.reduce_to)
+    payload = build_decrease_order_payload(
+        req.reduce_by,
+        req.reduce_to,
+        exchange_index=req.exchange_index,
+        market_ticker=req.market_ticker,
+    )
+    query = {"subaccount": req.subaccount} if req.subaccount is not None else None
     if not req.confirm:
         return {
             "preview": True,
@@ -954,8 +990,11 @@ async def handle_decrease_order(request: dict[str, Any]) -> Any:
             "order_id": req.order_id,
             "kalshi_v2_payload": payload,
             "confirm_required": True,
+            **({"query": query} if query else {}),
         }
-    return await kalshi_client.decrease_order(req.order_id, payload)
+    if query is None:
+        return await kalshi_client.decrease_order(req.order_id, payload)
+    return await kalshi_client.decrease_order(req.order_id, payload, query)
 
 
 # ========================== Batch Orders & Groups ============================
@@ -989,6 +1028,10 @@ async def handle_batch_create_orders(request: dict[str, Any]) -> Any:
             reduce_only=item.reduce_only,
             expiration_ts=item.expiration_ts,
             client_order_id=client_order_id,
+            order_group_id=item.order_group_id,
+            cancel_order_on_pause=item.cancel_order_on_pause,
+            subaccount=item.subaccount,
+            exchange_index=item.exchange_index,
         )
         order_payloads.append(p)
         previews.append(
@@ -1019,7 +1062,8 @@ async def handle_batch_create_orders(request: dict[str, Any]) -> Any:
     name="batch_cancel_orders",
     description=(
         "Cancel multiple resting orders in one batched request (V2). Kalshi scales the maximum "
-        "batch size with your API tier and reports errors per order. SAFETY: returns a "
+        "batch size with your API tier and reports errors per order. Pass exactly one of "
+        "order_ids or orders, not both. SAFETY: returns a "
         "preview and cancels NOTHING unless confirm=true."
     ),
     input_schema=BatchCancelOrdersRequest,
@@ -1030,23 +1074,35 @@ async def handle_batch_create_orders(request: dict[str, Any]) -> Any:
 )
 async def handle_batch_cancel_orders(request: dict[str, Any]) -> Any:
     req = BatchCancelOrdersRequest(**request)
+    items: list[dict[str, Any]] | None = (
+        [o.model_dump(exclude_none=True) for o in req.orders]
+        if req.orders is not None
+        else None
+    )
+    order_ids = (
+        [i["order_id"] for i in items] if items is not None else req.order_ids or []
+    )
     if not req.confirm:
         return {
             "preview": True,
             "message": (
-                f"[{settings.env_label}] Cancel {len(req.order_ids)} order(s). "
+                f"[{settings.env_label}] Cancel {len(order_ids)} order(s). "
                 "Re-run with confirm=true to cancel."
             ),
             "environment": settings.env_label,
-            "order_ids": req.order_ids,
-            "count": len(req.order_ids),
+            "order_ids": order_ids,
+            "count": len(order_ids),
             "confirm_required": True,
+            **({"orders": items} if items is not None else {}),
         }
-    result = await kalshi_client.batch_cancel_orders(req.order_ids)
+    if items is None:
+        result = await kalshi_client.batch_cancel_orders(order_ids)
+    else:
+        result = await kalshi_client.batch_cancel_orders(items=items)
     return {
         "canceled": True,
         "environment": settings.env_label,
-        "count": len(req.order_ids),
+        "count": len(order_ids),
         "result": result,
     }
 
@@ -1147,7 +1203,11 @@ async def handle_get_milestone(request: dict[str, Any]) -> Any:
 )
 async def handle_get_event_live_data(request: dict[str, Any]) -> Any:
     req = GetEventLiveDataRequest(**request)
-    return await kalshi_client.get_event_live_data(req.event_ticker)
+    if req.range is None:
+        return await kalshi_client.get_event_live_data(req.event_ticker)
+    return await kalshi_client.get_event_live_data(
+        req.event_ticker, range_hint=req.range
+    )
 
 
 @ToolRegistry.register_tool(
@@ -1210,6 +1270,9 @@ async def handle_list_order_groups(request: dict[str, Any]) -> Any:
 )
 async def handle_cancel_order_group(request: dict[str, Any]) -> Any:
     req = CancelOrderGroupRequest(**request)
+    query = _params(
+        request, CancelOrderGroupRequest, drop=("order_group_id", "confirm")
+    )
     if not req.confirm:
         return {
             "preview": True,
@@ -1220,8 +1283,12 @@ async def handle_cancel_order_group(request: dict[str, Any]) -> Any:
             "environment": settings.env_label,
             "order_group_id": req.order_group_id,
             "confirm_required": True,
+            **({"query": query} if query else {}),
         }
-    result = await kalshi_client.cancel_order_group(req.order_group_id)
+    if not query:
+        result = await kalshi_client.cancel_order_group(req.order_group_id)
+    else:
+        result = await kalshi_client.cancel_order_group(req.order_group_id, query)
     return {"canceled": True, "environment": settings.env_label, "result": result}
 
 

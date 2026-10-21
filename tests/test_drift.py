@@ -1,14 +1,24 @@
 """Tests for OpenAPI drift monitor and parameter deprecation checking."""
 
+import socket
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+from mcp_server_kalshi.ssrf import validate_spec_url
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.check_openapi_drift import (
+    ALLOWLIST_PATH,
+    CLIENT_PATH,
+    DEFAULT_SPEC_URL,
     ClientCall,
     check_drift,
+    extract_client_calls,
     is_parameter_deprecated,
     load_allowlist,
     normalize_path,
@@ -233,3 +243,112 @@ paths:
         allowlist_path=mock_allow,
     )
     assert code == 1
+
+
+# ---- Spec URL host check (before any fetch) ------------------------------------------
+# DNS is mocked at mcp_server_kalshi.ssrf.socket.getaddrinfo and httpx.AsyncClient is mocked, so
+# these tests make no network calls.
+
+_SPEC_YAML = "paths:\n  /exchange/status:\n    get:\n      parameters: []\n"
+
+
+def _answers(*addrs: str):
+    def _getaddrinfo(host, port, *args, **kwargs):
+        return [
+            (
+                socket.AF_INET6 if ":" in a else socket.AF_INET,
+                socket.SOCK_STREAM,
+                6,
+                "",
+                (a, 0),
+            )
+            for a in addrs
+        ]
+
+    return _getaddrinfo
+
+
+def _client_and_allowlist(tmp_path: Path) -> tuple[Path, Path]:
+    client = tmp_path / "client.py"
+    client.write_text(
+        'class C:\n    async def s(self):\n        await self.get("/exchange/status")\n'
+    )
+    allow = tmp_path / "allowlist.txt"
+    allow.write_text("")
+    return client, allow
+
+
+@pytest.mark.parametrize(
+    ("url", "reason"),
+    [
+        ("http://docs.kalshi.com/openapi.yaml", "https is required"),
+        ("https://evil.example.com/openapi.yaml", "not allowlisted"),
+        ("https://docs.kalshi.com.evil.com/openapi.yaml", "not allowlisted"),
+        ("https://169.254.169.254/latest/meta-data", "blocked"),
+        ("https://user@docs.kalshi.com/openapi.yaml", "userinfo"),
+        ("https://docs.kalshi.com:8443/openapi.yaml", "port"),
+    ],
+)
+def test_spec_url_rejected_before_dns_and_fetch(
+    tmp_path, monkeypatch, capsys, url, reason
+):
+    client, allow = _client_and_allowlist(tmp_path)
+
+    def _no_dns(*args, **kwargs):
+        raise AssertionError("must not resolve a URL that fails policy")
+
+    monkeypatch.setattr("mcp_server_kalshi.ssrf.socket.getaddrinfo", _no_dns)
+    with patch("scripts.check_openapi_drift.httpx.AsyncClient") as get:
+        code = check_drift(spec_url=url, client_path=client, allowlist_path=allow)
+    assert code == 2
+    get.assert_not_called()
+    out = capsys.readouterr().out
+    assert "Refused to fetch spec URL" in out
+    assert reason in out
+
+
+@pytest.mark.parametrize(
+    "answer", ["10.0.0.5", "127.0.0.1", "169.254.169.254", "fd00::1"]
+)
+def test_spec_url_rejected_when_docs_host_resolves_private(
+    tmp_path, monkeypatch, capsys, answer
+):
+    client, allow = _client_and_allowlist(tmp_path)
+    monkeypatch.setattr(
+        "mcp_server_kalshi.ssrf.socket.getaddrinfo", _answers("104.18.0.1", answer)
+    )
+    with patch("scripts.check_openapi_drift.httpx.AsyncClient") as get:
+        code = check_drift(
+            spec_url=DEFAULT_SPEC_URL, client_path=client, allowlist_path=allow
+        )
+    assert code == 2
+    get.assert_not_called()
+    assert "resolves to a blocked" in capsys.readouterr().out
+
+
+def test_spec_url_unresolvable_is_refused(tmp_path, monkeypatch):
+    client, allow = _client_and_allowlist(tmp_path)
+
+    def _gaierror(*args, **kwargs):
+        raise socket.gaierror("no such host")
+
+    monkeypatch.setattr("mcp_server_kalshi.ssrf.socket.getaddrinfo", _gaierror)
+    with patch("scripts.check_openapi_drift.httpx.AsyncClient") as get:
+        code = check_drift(
+            spec_url=DEFAULT_SPEC_URL, client_path=client, allowlist_path=allow
+        )
+    assert code == 2
+    get.assert_not_called()
+
+
+def test_default_spec_url_passes_policy():
+    assert validate_spec_url(DEFAULT_SPEC_URL) == DEFAULT_SPEC_URL
+
+
+def test_repo_allowlist_lists_only_routes_the_client_calls():
+    """Stale entries (routes the client never calls) hide nothing and must be removed."""
+    called = {(c.method, c.normalized_path) for c in extract_client_calls(CLIENT_PATH)}
+    stale = load_allowlist(ALLOWLIST_PATH) - called
+    assert stale == set()
+    assert ("POST", "/portfolio/withdrawals") not in load_allowlist(ALLOWLIST_PATH)
+    assert ("POST", "/portfolio/deposits") not in load_allowlist(ALLOWLIST_PATH)
