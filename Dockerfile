@@ -36,6 +36,8 @@ LABEL io.modelcontextprotocol.server.name="io.github.christianclaudio/mcp-server
 # trixie (same index digest as 3.12-slim-trixie on 2026-10-21); Debian shipped
 # ca-certificates 20250419+deb13u1 in trixie-security (DSA-6572-1). The build fails if the
 # installed package is older, so a base image change cannot drop the fix.
+# https://github.com/PrefectHQ/fastmcp/pull/5945 (notice) and
+# https://security-tracker.debian.org/tracker/DSA-6572-1 (Debian floor)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends --only-upgrade ca-certificates && \
     rm -rf /var/lib/apt/lists/* && \
