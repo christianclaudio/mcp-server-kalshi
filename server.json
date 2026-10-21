@@ -35,7 +35,7 @@
         },
         {
           "name": "BASE_URL",
-          "description": "Optional https override; only the demo or prod Kalshi API host plus /trade-api/v2",
+          "description": "Optional https override; only a Kalshi demo or prod API host (shared or dedicated external-api) plus /trade-api/v2",
           "isRequired": false
         },
         {

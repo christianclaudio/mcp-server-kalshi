@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from mcp_server_kalshi.config import ENV_REST_BASE
+from mcp_server_kalshi.config import ENV_REST_BASE, PROD_DEDICATED_REST_BASE
 from mcp_server_kalshi.ssrf import (
     KALSHI_API_HOSTS,
     KALSHI_PDF_HOSTS,
@@ -179,9 +179,12 @@ def test_pdf_url_normalization() -> None:
 
 
 def test_api_bases_match_configured_environments() -> None:
-    hosts = {urlsplit(url).hostname for url in ENV_REST_BASE.values()}
+    # Every allowlisted API host is a documented base: the KALSHI_ENV defaults plus the
+    # opt-in dedicated production host (Kalshi changelog, 2026-05-07).
+    bases = [*ENV_REST_BASE.values(), PROD_DEDICATED_REST_BASE]
+    hosts = {urlsplit(url).hostname for url in bases}
     assert hosts == set(KALSHI_API_HOSTS)
-    for url in ENV_REST_BASE.values():
+    for url in bases:
         assert validate_api_base_url(url) == url.rstrip("/")
 
 
@@ -204,6 +207,10 @@ def test_api_bases_match_configured_environments() -> None:
             "https://api.elections.kalshi.com/trade-api/v2",
             "https://api.elections.kalshi.com/trade-api/v2",
         ),
+        (
+            "https://External-API.kalshi.com/trade-api/v2/",
+            "https://external-api.kalshi.com/trade-api/v2",
+        ),
     ],
 )
 def test_allows_kalshi_api_bases(url: str, expected: str) -> None:
@@ -225,6 +232,10 @@ def test_allows_kalshi_api_bases(url: str, expected: str) -> None:
         ("https://demo-api.kalshi.co/trade-api/v2/extra", "trade-api/v2"),
         ("https://demo-api.kalshi.co", "trade-api/v2"),
         ("https://demo-api.kalshi.co/other", "trade-api/v2"),
+        ("http://external-api.kalshi.com/trade-api/v2", "https is required"),
+        ("https://external-api.kalshi.com.evil.com/trade-api/v2", "not allowlisted"),
+        ("https://external-api.kalshi.com/trade-api/v1", "trade-api/v2"),
+        ("https://external-api.kalshi.com:8443/trade-api/v2", "port"),
     ],
 )
 def test_rejects_bad_api_bases(url: str, match: str) -> None:

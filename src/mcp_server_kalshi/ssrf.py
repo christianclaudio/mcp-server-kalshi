@@ -15,11 +15,15 @@ from collections.abc import Collection
 from typing import cast
 from urllib.parse import urlsplit, urlunsplit
 
-# Trade API hosts this fork already uses. See config.ENV_REST_BASE.
+# Trade API hosts: the demo and shared production hosts (config.ENV_REST_BASE) and the
+# dedicated production host (config.PROD_DEDICATED_REST_BASE), which Kalshi added to its
+# docs on 2026-05-07 (https://docs.kalshi.com/changelog) and lists first in the OpenAPI
+# servers. The shared host "remain[s] supported for compatibility".
 KALSHI_API_HOSTS: frozenset[str] = frozenset(
     {
         "demo-api.kalshi.co",
         "api.elections.kalshi.com",
+        "external-api.kalshi.com",
     }
 )
 
@@ -83,8 +87,9 @@ _BLOCKED_ADDRESS = (
     "URL targets a blocked private, loopback, link-local, or metadata address"
 )
 _API_BASE = (
-    "Kalshi API base URL must be https://demo-api.kalshi.co/trade-api/v2 "
-    "or https://api.elections.kalshi.com/trade-api/v2"
+    "Kalshi API base URL must be https://demo-api.kalshi.co/trade-api/v2, "
+    "https://api.elections.kalshi.com/trade-api/v2, "
+    "or https://external-api.kalshi.com/trade-api/v2"
 )
 
 

@@ -54,7 +54,7 @@ graph TD
 | `KALSHI_API_KEY` / `KALSHI_API_KEY_ID` | _(none)_ | Kalshi API key ID. Required for portfolio and order tools. |
 | `KALSHI_PRIVATE_KEY_PATH` | _(none)_ | Path to your RSA or Ed25519 private key `.pem`. |
 | `KALSHI_READONLY` | `0` / `false` | When enabled (`1`), disables all mutating order endpoints at startup. |
-| `BASE_URL` | _(derived)_ | Optional REST override. Only `https://demo-api.kalshi.co/trade-api/v2` or `https://api.elections.kalshi.com/trade-api/v2`. |
+| `BASE_URL` | _(derived)_ | Optional REST override. Only `https://demo-api.kalshi.co/trade-api/v2`, `https://api.elections.kalshi.com/trade-api/v2`, or Kalshi's dedicated production host `https://external-api.kalshi.com/trade-api/v2` ([changelog, May 7, 2026](https://docs.kalshi.com/changelog)). With `KALSHI_ENV=prod` and no override, the server keeps using the shared `api.elections.kalshi.com` host, which Kalshi still supports. |
 
 ---
 
