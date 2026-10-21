@@ -15,17 +15,23 @@ from collections.abc import Collection
 from typing import cast
 from urllib.parse import urlsplit, urlunsplit
 
-# Trade API hosts: the demo and shared production hosts (config.ENV_REST_BASE) and the
-# dedicated production host (config.PROD_DEDICATED_REST_BASE), which Kalshi added to its
-# docs on 2026-05-07 (https://docs.kalshi.com/changelog) and lists first in the OpenAPI
-# servers. The shared host "remain[s] supported for compatibility".
+# Trade API hosts: the shared demo and production hosts (config.ENV_REST_BASE) and the
+# dedicated production and demo hosts (config.PROD_DEDICATED_REST_BASE and
+# config.DEMO_DEDICATED_REST_BASE), which Kalshi added to its docs on 2026-05-07
+# (https://docs.kalshi.com/changelog) and lists in the OpenAPI servers. The shared hosts
+# "remain supported for compatibility".
 KALSHI_API_HOSTS: frozenset[str] = frozenset(
     {
         "demo-api.kalshi.co",
         "api.elections.kalshi.com",
         "external-api.kalshi.com",
+        "external-api.demo.kalshi.co",
     }
 )
+
+# Host of Kalshi's published OpenAPI spec, the only host scripts/check_openapi_drift.py
+# fetches from.
+KALSHI_SPEC_HOSTS: frozenset[str] = frozenset({"docs.kalshi.com"})
 
 # Series contract_terms_url / contract_url hosts (prod assets CDN, demo staging
 # bucket) plus the legacy public-docs bucket those PDFs were originally hosted on.
@@ -89,7 +95,8 @@ _BLOCKED_ADDRESS = (
 _API_BASE = (
     "Kalshi API base URL must be https://demo-api.kalshi.co/trade-api/v2, "
     "https://api.elections.kalshi.com/trade-api/v2, "
-    "or https://external-api.kalshi.com/trade-api/v2"
+    "https://external-api.kalshi.com/trade-api/v2, "
+    "or https://external-api.demo.kalshi.co/trade-api/v2"
 )
 
 
@@ -266,6 +273,31 @@ async def avalidate_pdf_url(url: str) -> str:
         url,
         allowed_hosts=KALSHI_PDF_HOSTS,
         https_only=False,
+    )
+    await _assert_public_dns(host)
+    return normalized
+
+
+def validate_spec_url(url: str) -> str:
+    """Validate an OpenAPI spec URL without DNS (https, port 443, allowlisted docs host)."""
+    normalized, _ = _parse_outbound_url(
+        url,
+        allowed_hosts=KALSHI_SPEC_HOSTS,
+        https_only=True,
+    )
+    return normalized
+
+
+async def avalidate_spec_url(url: str) -> str:
+    """Validate an OpenAPI spec URL and reject a blocked DNS answer.
+
+    The drift script calls this before its one GET, so a docs host that resolves to a
+    private, loopback, link-local, or metadata address is refused before any request.
+    """
+    normalized, host = _parse_outbound_url(
+        url,
+        allowed_hosts=KALSHI_SPEC_HOSTS,
+        https_only=True,
     )
     await _assert_public_dns(host)
     return normalized

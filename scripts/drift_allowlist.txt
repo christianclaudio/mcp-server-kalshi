@@ -1,8 +1,8 @@
 # Drift allowlist: endpoints in client.py NOT in the OpenAPI spec, or intentionally excluded
 # Each entry is justified — do NOT add entries just to make the check pass.
+# List only routes the client actually calls; tests/test_drift.py fails on an entry that
+# matches no client call.
 #
 # Format: METHOD /path/with/{}/placeholders  # justification
 
-# Institutional FCM banking and internal withdrawal pipelines are excluded for security
-POST /portfolio/withdrawals  # Institutional banking withdrawal; excluded from automated agent MCP tool surface
-POST /portfolio/deposits     # Institutional banking deposit; excluded from automated agent MCP tool surface
+# No entries: every route the client calls is in Kalshi's OpenAPI spec (v3.34.0).

@@ -15,6 +15,10 @@ ENV_REST_BASE = {
 # https://docs.kalshi.com/changelog). Opt in with BASE_URL; the default stays on the
 # shared host above, which Kalshi says remains supported.
 PROD_DEDICATED_REST_BASE = "https://external-api.kalshi.com/trade-api/v2"
+# Kalshi's dedicated demo REST host, from the same changelog entry. Opt in with BASE_URL;
+# the demo default stays on the shared demo host. Its URL contains "demo", so
+# is_production is False and get_environment reports DEMO.
+DEMO_DEDICATED_REST_BASE = "https://external-api.demo.kalshi.co/trade-api/v2"
 ENV_WS_BASE = {
     "prod": "wss://api.elections.kalshi.com/trade-api/ws/v2",
     "demo": "wss://demo-api.kalshi.co/trade-api/ws/v2",
@@ -42,7 +46,8 @@ class Settings(BaseSettings):
             "Explicit REST base URL override. Only "
             "https://demo-api.kalshi.co/trade-api/v2, "
             "https://api.elections.kalshi.com/trade-api/v2, or Kalshi's dedicated "
-            "production host https://external-api.kalshi.com/trade-api/v2. "
+            "hosts https://external-api.kalshi.com/trade-api/v2 (production) and "
+            "https://external-api.demo.kalshi.co/trade-api/v2 (demo). "
             "Derived from KALSHI_ENV when unset."
         ),
     )

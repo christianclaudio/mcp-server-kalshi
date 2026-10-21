@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import asyncio
 import re
 import sys
 from dataclasses import dataclass, field
@@ -18,6 +19,8 @@ from typing import Any
 
 import httpx
 import yaml
+
+from mcp_server_kalshi.ssrf import UnsafeURLError, avalidate_spec_url
 
 REPO = Path(__file__).resolve().parent.parent
 CLIENT_PATH = REPO / "src" / "mcp_server_kalshi" / "kalshi_client" / "client.py"
@@ -255,7 +258,14 @@ def check_drift(
             raw = yaml.safe_load(local_spec.read_text(encoding="utf-8"))
         else:
             print(f"[*] Fetching live spec from: {spec_url}")
-            resp = httpx.get(spec_url, timeout=15.0)
+            try:
+                # https only, docs.kalshi.com only, and the name must not resolve to a
+                # private, loopback, link-local or metadata address. Checked before the GET.
+                safe_url = asyncio.run(avalidate_spec_url(spec_url))
+            except UnsafeURLError as exc:
+                print(f"[!] Refused to fetch spec URL: {exc}")
+                return 2
+            resp = httpx.get(safe_url, timeout=15.0, follow_redirects=False)
             resp.raise_for_status()
             raw = yaml.safe_load(resp.text)
     except Exception as exc:
@@ -339,7 +349,9 @@ def main() -> int:
         description="Check Kalshi API OpenAPI drift and parameter deprecations."
     )
     parser.add_argument(
-        "--spec-url", default=DEFAULT_SPEC_URL, help="URL to OpenAPI YAML/JSON."
+        "--spec-url",
+        default=DEFAULT_SPEC_URL,
+        help="URL to OpenAPI YAML/JSON. Must be https on docs.kalshi.com.",
     )
     parser.add_argument(
         "--local-spec", type=Path, default=None, help="Path to local OpenAPI YAML/JSON."

@@ -44,9 +44,20 @@ class MCPSchemaBaseModel(BaseModel):
         }
 
 
-# Shared pagination fields
+def _page_limit(maximum: int, *, minimum: int = 1) -> Any:
+    """Optional page size bounded by the endpoint's own OpenAPI v3.34.0 limits."""
+    return Field(
+        default=None,
+        ge=minimum,
+        le=maximum,
+        description=f"Results per page ({minimum}-{maximum}).",
+    )
+
+
+# Shared pagination fields. Each subclass sets ``limit`` to its endpoint's spec bounds;
+# the default here (1-1000) is the bound of the portfolio list endpoints.
 class _Paginated(MCPSchemaBaseModel):
-    limit: int | None = Field(default=None, description="Results per page (1-1000).")
+    limit: int | None = _page_limit(1000)
     cursor: str | None = Field(
         default=None, description="Pagination cursor for the next page."
     )
@@ -80,7 +91,8 @@ class ListMarketsRequest(_Paginated):
     series_ticker: str | None = Field(
         default=None, description="Filter by series ticker."
     )
-    status: Literal["unopened", "open", "closed", "settled"] | None = Field(
+    limit: int | None = _page_limit(1000, minimum=0)
+    status: Literal["unopened", "open", "paused", "closed", "settled"] | None = Field(
         default=None, description="Filter by market status."
     )
     tickers: str | None = Field(
@@ -123,6 +135,7 @@ class GetMarketRequest(MCPSchemaBaseModel):
 
 
 class ListEventsRequest(_Paginated):
+    limit: int | None = _page_limit(200)
     series_ticker: str | None = Field(
         default=None, description="Filter by series ticker."
     )
@@ -226,6 +239,7 @@ class GetMarketCandlesticksRequest(MCPSchemaBaseModel):
 
 
 class GetMarketTradesRequest(_Paginated):
+    limit: int | None = _page_limit(1000, minimum=0)
     ticker: str = Field(..., description="The market ticker.")
     min_ts: int | None = Field(
         default=None, description="Only trades after this Unix ts."
@@ -597,7 +611,9 @@ class GetSportsFiltersRequest(EmptyRequest):
 class GetMilestonesRequest(MCPSchemaBaseModel):
     """Request milestone trackers (e.g. sports games, elections)."""
 
-    limit: int = Field(default=20, ge=1, le=100, description="Number of milestones.")
+    limit: int = Field(
+        default=20, ge=1, le=500, description="Number of milestones (1-500)."
+    )
     category: str | None = Field(default=None, description="Filter by category.")
     competition: str | None = Field(default=None, description="Filter by competition.")
     type: str | None = Field(default=None, description="Filter by milestone type.")
@@ -650,7 +666,9 @@ class ListMultivariateCollectionsRequest(MCPSchemaBaseModel):
     associated_event_ticker: str | None = Field(
         default=None, description="Only collections associated with this event ticker."
     )
-    limit: int | None = Field(default=20, ge=1, le=100, description="Page limit.")
+    limit: int | None = Field(
+        default=20, ge=1, le=200, description="Page limit (1-200)."
+    )
     cursor: str | None = Field(default=None, description="Pagination cursor.")
 
 
@@ -663,10 +681,23 @@ class GetMultivariateCollectionRequest(MCPSchemaBaseModel):
 
 
 class ListOrderGroupsRequest(MCPSchemaBaseModel):
-    """List order groups: groups with a contracts limit over a rolling 15-second window that cancel all their orders when the limit is hit."""
+    """List order groups: groups with a contracts limit over a rolling 15-second window that cancel all their orders when the limit is hit.
 
-    limit: int | None = Field(default=20, ge=1, le=100, description="Page limit.")
-    cursor: str | None = Field(default=None, description="Pagination cursor.")
+    ``limit`` and ``cursor`` predate Kalshi OpenAPI v3.34.0, which documents only
+    ``subaccount`` on GET /portfolio/order_groups. They are kept for compatibility and
+    still sent as before.
+    """
+
+    limit: int | None = Field(
+        default=20,
+        ge=1,
+        le=100,
+        description="Page limit (1-100). Not in Kalshi's OpenAPI spec; kept for compatibility.",
+    )
+    cursor: str | None = Field(
+        default=None,
+        description="Pagination cursor. Not in Kalshi's OpenAPI spec; kept for compatibility.",
+    )
     subaccount: int | None = Field(default=None, ge=0, description=_SUBACCOUNT_ALL)
 
 

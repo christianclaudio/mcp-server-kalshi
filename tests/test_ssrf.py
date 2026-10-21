@@ -7,15 +7,22 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from mcp_server_kalshi.config import ENV_REST_BASE, PROD_DEDICATED_REST_BASE
+from mcp_server_kalshi.config import (
+    DEMO_DEDICATED_REST_BASE,
+    ENV_REST_BASE,
+    PROD_DEDICATED_REST_BASE,
+)
 from mcp_server_kalshi.ssrf import (
     KALSHI_API_HOSTS,
     KALSHI_PDF_HOSTS,
+    KALSHI_SPEC_HOSTS,
     UnsafeURLError,
     avalidate_api_base_url,
     avalidate_pdf_url,
+    avalidate_spec_url,
     validate_api_base_url,
     validate_pdf_url,
+    validate_spec_url,
 )
 
 
@@ -180,8 +187,12 @@ def test_pdf_url_normalization() -> None:
 
 def test_api_bases_match_configured_environments() -> None:
     # Every allowlisted API host is a documented base: the KALSHI_ENV defaults plus the
-    # opt-in dedicated production host (Kalshi changelog, 2026-05-07).
-    bases = [*ENV_REST_BASE.values(), PROD_DEDICATED_REST_BASE]
+    # opt-in dedicated production and demo hosts (Kalshi changelog, 2026-05-07).
+    bases = [
+        *ENV_REST_BASE.values(),
+        PROD_DEDICATED_REST_BASE,
+        DEMO_DEDICATED_REST_BASE,
+    ]
     hosts = {urlsplit(url).hostname for url in bases}
     assert hosts == set(KALSHI_API_HOSTS)
     for url in bases:
@@ -211,6 +222,10 @@ def test_api_bases_match_configured_environments() -> None:
             "https://External-API.kalshi.com/trade-api/v2/",
             "https://external-api.kalshi.com/trade-api/v2",
         ),
+        (
+            "https://External-API.Demo.Kalshi.co:443/trade-api/v2/",
+            "https://external-api.demo.kalshi.co/trade-api/v2",
+        ),
     ],
 )
 def test_allows_kalshi_api_bases(url: str, expected: str) -> None:
@@ -236,6 +251,15 @@ def test_allows_kalshi_api_bases(url: str, expected: str) -> None:
         ("https://external-api.kalshi.com.evil.com/trade-api/v2", "not allowlisted"),
         ("https://external-api.kalshi.com/trade-api/v1", "trade-api/v2"),
         ("https://external-api.kalshi.com:8443/trade-api/v2", "port"),
+        ("http://external-api.demo.kalshi.co/trade-api/v2", "https is required"),
+        (
+            "https://external-api.demo.kalshi.co.evil.com/trade-api/v2",
+            "not allowlisted",
+        ),
+        ("https://demo.kalshi.co/trade-api/v2", "not allowlisted"),
+        ("https://external-api.demo.kalshi.co/trade-api/v1", "trade-api/v2"),
+        ("https://external-api.demo.kalshi.co:8443/trade-api/v2", "port"),
+        ("https://external-api.demo.kalshi.co/trade-api/v2?x=1", "trade-api/v2"),
     ],
 )
 def test_rejects_bad_api_bases(url: str, match: str) -> None:
@@ -347,3 +371,39 @@ async def test_dns_lookup_yields_to_the_event_loop(monkeypatch) -> None:
     )
     await tick
     assert order.index("tick") < order.index("dns")
+
+
+# ---- OpenAPI spec URL (scripts/check_openapi_drift.py) --------------------------------
+def test_spec_hosts_are_docs_only() -> None:
+    assert KALSHI_SPEC_HOSTS == frozenset({"docs.kalshi.com"})
+    assert not KALSHI_SPEC_HOSTS & KALSHI_API_HOSTS
+
+
+@pytest.mark.parametrize(
+    ("url", "match"),
+    [
+        ("http://docs.kalshi.com/openapi.yaml", "https is required"),
+        ("https://docs.kalshi.com.evil.com/openapi.yaml", "not allowlisted"),
+        ("https://demo-api.kalshi.co/openapi.yaml", "not allowlisted"),
+        ("https://10.0.0.5/openapi.yaml", "blocked"),
+        ("https://metadata.google.internal/openapi.yaml", "blocked"),
+        ("https://docs.kalshi.com:8443/openapi.yaml", "port"),
+        ("https://u@docs.kalshi.com/openapi.yaml", "userinfo"),
+    ],
+)
+def test_rejects_bad_spec_urls(url: str, match: str) -> None:
+    with pytest.raises(UnsafeURLError, match=match):
+        validate_spec_url(url)
+
+
+async def test_spec_url_dns_check(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "mcp_server_kalshi.ssrf.socket.getaddrinfo", _dns("104.18.0.1", "2606:4700::1")
+    )
+    assert (
+        await avalidate_spec_url("https://DOCS.kalshi.com/openapi.yaml")
+        == "https://docs.kalshi.com/openapi.yaml"
+    )
+    monkeypatch.setattr("mcp_server_kalshi.ssrf.socket.getaddrinfo", _dns("127.0.0.1"))
+    with pytest.raises(UnsafeURLError, match="resolves to a blocked"):
+        await avalidate_spec_url("https://docs.kalshi.com/openapi.yaml")
