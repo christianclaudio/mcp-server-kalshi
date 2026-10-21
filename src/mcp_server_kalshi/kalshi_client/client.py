@@ -34,6 +34,10 @@ def build_create_order_payload(
     reduce_only: bool = False,
     client_order_id: str | None = None,
     expiration_ts: int | None = None,
+    order_group_id: str | None = None,
+    cancel_order_on_pause: bool | None = None,
+    subaccount: int | None = None,
+    exchange_index: int | None = None,
 ) -> dict[str, Any]:
     """Translate an intuitive (action, side, cents) order into the Kalshi V2 payload.
 
@@ -73,6 +77,15 @@ def build_create_order_payload(
         payload["reduce_only"] = True
     if expiration_ts:
         payload["expiration_time"] = expiration_ts
+    # Optional CreateOrderV2Request fields (Kalshi OpenAPI v3.34.0); sent only when set.
+    if order_group_id:
+        payload["order_group_id"] = order_group_id
+    if cancel_order_on_pause is not None:
+        payload["cancel_order_on_pause"] = cancel_order_on_pause
+    if subaccount is not None:
+        payload["subaccount"] = subaccount
+    if exchange_index is not None:
+        payload["exchange_index"] = exchange_index
     return payload
 
 
@@ -84,8 +97,15 @@ def build_amend_order_payload(
     count: float,
     limit_price_cents: int,
     updated_client_order_id: str | None = None,
+    client_order_id: str | None = None,
+    expiration_time: int | None = None,
+    exchange_index: int | None = None,
 ) -> dict[str, Any]:
-    """Build the Kalshi V2 amend body, using the same YES-leg translation as create."""
+    """Build the Kalshi V2 amend body, using the same YES-leg translation as create.
+
+    ``expiration_time`` follows AmendOrderV2Request: omit it (None) to keep the current
+    expiry, ``0`` removes it, a future Unix-seconds value sets it.
+    """
     action = action.lower()
     side = side.lower()
     yes_leg_cents = limit_price_cents if side == "yes" else 100 - limit_price_cents
@@ -99,27 +119,45 @@ def build_amend_order_payload(
     }
     if updated_client_order_id:
         payload["updated_client_order_id"] = updated_client_order_id
+    if client_order_id:
+        payload["client_order_id"] = client_order_id
+    if expiration_time is not None:
+        payload["expiration_time"] = expiration_time
+    if exchange_index is not None:
+        payload["exchange_index"] = exchange_index
     return payload
 
 
 def build_decrease_order_payload(
-    reduce_by: float | None = None, reduce_to: float | None = None
+    reduce_by: float | None = None,
+    reduce_to: float | None = None,
+    *,
+    exchange_index: int | None = None,
+    market_ticker: str | None = None,
 ) -> dict[str, Any]:
     """Build the Kalshi V2 decrease body. Exactly one of reduce_by / reduce_to required."""
     if (reduce_by is None) == (reduce_to is None):
         raise ValueError("Provide exactly one of reduce_by or reduce_to.")
+    payload: dict[str, Any]
     if reduce_by is not None:
-        return {
+        payload = {
             "reduce_by": (
                 str(reduce_by) if reduce_by != int(reduce_by) else str(int(reduce_by))
             )
         }
-    assert reduce_to is not None  # guaranteed by the exactly-one check above
-    return {
-        "reduce_to": (
-            str(reduce_to) if reduce_to != int(reduce_to) else str(int(reduce_to))
-        )
-    }
+    else:
+        assert reduce_to is not None  # guaranteed by the exactly-one check above
+        payload = {
+            "reduce_to": (
+                str(reduce_to) if reduce_to != int(reduce_to) else str(int(reduce_to))
+            )
+        }
+    # Optional DecreaseOrderV2Request routing fields (Kalshi OpenAPI v3.34.0).
+    if exchange_index is not None:
+        payload["exchange_index"] = exchange_index
+    if market_ticker:
+        payload["market_ticker"] = market_ticker
+    return payload
 
 
 class KalshiAPIClient(BaseAPIClient):
@@ -181,13 +219,17 @@ class KalshiAPIClient(BaseAPIClient):
         return await self.get("/events", params=params)
 
     async def get_event(
-        self, event_ticker: str, with_nested_markets: bool | None = None
+        self,
+        event_ticker: str,
+        with_nested_markets: bool | None = None,
+        exclude_markets: bool | None = None,
     ) -> Any:
-        params = (
-            {"with_nested_markets": with_nested_markets}
-            if with_nested_markets is not None
-            else None
-        )
+        query: dict[str, Any] = {}
+        if with_nested_markets is not None:
+            query["with_nested_markets"] = with_nested_markets
+        if exclude_markets is not None:
+            query["exclude_markets"] = exclude_markets
+        params = query or None
         quoted = urllib.parse.quote(event_ticker, safe="")
         return await self.get(f"/events/{quoted}", params=params)
 
@@ -195,14 +237,19 @@ class KalshiAPIClient(BaseAPIClient):
     async def get_series_list(self, params: dict[str, Any] | None = None) -> Any:
         return await self.get("/series", params=params)
 
-    async def get_series(self, series_ticker: str) -> Any:
+    async def get_series(
+        self, series_ticker: str, include_volume: bool | None = None
+    ) -> Any:
+        params = (
+            {"include_volume": include_volume} if include_volume is not None else None
+        )
         quoted = urllib.parse.quote(series_ticker, safe="")
-        return await self.get(f"/series/{quoted}")
+        return await self.get(f"/series/{quoted}", params=params)
 
     # ---- Portfolio (auth) ---------------------------------------------------------
-    async def get_balance(self) -> Any:
+    async def get_balance(self, params: dict[str, Any] | None = None) -> Any:
         self._require_auth()
-        return await self.get("/portfolio/balance")
+        return await self.get("/portfolio/balance", params=params)
 
     async def get_positions(self, params: dict[str, Any] | None = None) -> Any:
         self._require_auth()
@@ -231,21 +278,35 @@ class KalshiAPIClient(BaseAPIClient):
         self._require_auth()
         return await self.post("/portfolio/events/orders", json=payload)
 
-    async def cancel_order(self, order_id: str) -> Any:
+    async def cancel_order(
+        self, order_id: str, params: dict[str, Any] | None = None
+    ) -> Any:
         self._require_auth()
         quoted = urllib.parse.quote(order_id, safe="")
-        return await self.delete(f"/portfolio/events/orders/{quoted}")
+        return await self.delete(f"/portfolio/events/orders/{quoted}", params=params)
 
-    async def amend_order(self, order_id: str, payload: dict[str, Any]) -> Any:
-        self._require_auth()
-        quoted = urllib.parse.quote(order_id, safe="")
-        return await self.post(f"/portfolio/events/orders/{quoted}/amend", json=payload)
-
-    async def decrease_order(self, order_id: str, payload: dict[str, Any]) -> Any:
+    async def amend_order(
+        self,
+        order_id: str,
+        payload: dict[str, Any],
+        params: dict[str, Any] | None = None,
+    ) -> Any:
         self._require_auth()
         quoted = urllib.parse.quote(order_id, safe="")
         return await self.post(
-            f"/portfolio/events/orders/{quoted}/decrease", json=payload
+            f"/portfolio/events/orders/{quoted}/amend", json=payload, params=params
+        )
+
+    async def decrease_order(
+        self,
+        order_id: str,
+        payload: dict[str, Any],
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        self._require_auth()
+        quoted = urllib.parse.quote(order_id, safe="")
+        return await self.post(
+            f"/portfolio/events/orders/{quoted}/decrease", json=payload, params=params
         )
 
     # ---- Batch Orders (auth) ------------------------------------------------------
@@ -256,10 +317,20 @@ class KalshiAPIClient(BaseAPIClient):
             "/portfolio/events/orders/batched", json={"orders": orders_payload}
         )
 
-    async def batch_cancel_orders(self, order_ids: list[str]) -> Any:
-        """Batch cancel orders (V2); Kalshi scales the max batch size with the API tier."""
+    async def batch_cancel_orders(
+        self,
+        order_ids: list[str] | None = None,
+        *,
+        items: list[dict[str, Any]] | None = None,
+    ) -> Any:
+        """Batch cancel orders (V2); Kalshi scales the max batch size with the API tier.
+
+        Pass plain ``order_ids`` or prebuilt ``items`` (each ``{"order_id", ...}`` with the
+        optional ``subaccount`` / ``exchange_index`` / ``market_ticker`` routing fields).
+        """
         self._require_auth()
-        items = [{"order_id": oid} for oid in order_ids]
+        if items is None:
+            items = [{"order_id": oid} for oid in order_ids or []]
         return await self.delete(
             "/portfolio/events/orders/batched", json={"orders": items}
         )
@@ -283,10 +354,13 @@ class KalshiAPIClient(BaseAPIClient):
         quoted = urllib.parse.quote(milestone_id, safe="")
         return await self.get(f"/milestones/{quoted}")
 
-    async def get_event_live_data(self, event_ticker: str) -> Any:
-        """Get real-time live scoreboard/data for an event."""
+    async def get_event_live_data(
+        self, event_ticker: str, range_hint: str | None = None
+    ) -> Any:
+        """Get real-time live scoreboard/data for an event (optional ``range`` hint)."""
+        params = {"range": range_hint} if range_hint is not None else None
         quoted = urllib.parse.quote(event_ticker, safe="")
-        return await self.get(f"/live_data/events/{quoted}")
+        return await self.get(f"/live_data/events/{quoted}", params=params)
 
     # ---- Multivariate & Combos (public) ------------------------------------------
     async def list_multivariate_collections(
@@ -311,8 +385,10 @@ class KalshiAPIClient(BaseAPIClient):
         self._require_auth()
         return await self.get("/portfolio/order_groups", params=params)
 
-    async def cancel_order_group(self, order_group_id: str) -> Any:
+    async def cancel_order_group(
+        self, order_group_id: str, params: dict[str, Any] | None = None
+    ) -> Any:
         """Delete an order group and cancel all orders in it."""
         self._require_auth()
         quoted = urllib.parse.quote(order_group_id, safe="")
-        return await self.delete(f"/portfolio/order_groups/{quoted}")
+        return await self.delete(f"/portfolio/order_groups/{quoted}", params=params)

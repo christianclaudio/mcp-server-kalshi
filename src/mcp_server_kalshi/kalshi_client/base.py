@@ -174,8 +174,13 @@ class BaseAPIClient:
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         return await self._request("GET", path, params=params)
 
-    async def post(self, path: str, json: dict[str, Any] | None = None) -> Any:
-        return await self._request("POST", path, json=json)
+    async def post(
+        self,
+        path: str,
+        json: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        return await self._request("POST", path, params=params, json=json)
 
     async def delete(
         self,
