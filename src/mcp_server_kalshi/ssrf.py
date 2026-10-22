@@ -13,8 +13,9 @@ import ipaddress
 import re
 import socket
 import ssl
+import time
 import urllib.request
-from collections.abc import Collection, Iterable
+from collections.abc import Callable, Collection, Iterable
 from typing import Any, cast
 from urllib.parse import urlsplit, urlunsplit
 
@@ -429,10 +430,20 @@ def environment_proxy_for(url: str) -> str | None:
 
 
 class _PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
-    """Dial only an address that passed ``_assert_public_dns`` for the requested host."""
+    """Dial only an address that passed ``_assert_public_dns`` for the requested host.
 
-    def __init__(self, inner: httpcore.AsyncNetworkBackend | None = None) -> None:
+    The connect timeout httpcore passes in is one deadline for the whole call, shared by
+    every checked address, not a fresh timeout per address: each attempt gets only the
+    time left, and no further address is tried once it has run out.
+    """
+
+    def __init__(
+        self,
+        inner: httpcore.AsyncNetworkBackend | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._inner = inner or httpcore.AnyIOBackend()
+        self._clock = clock
 
     async def connect_tcp(
         self,
@@ -448,13 +459,21 @@ class _PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
             raise UnsafeURLError(
                 f"URL host {host!r} has no checked address to connect to"
             )
+        deadline = None if timeout is None else self._clock() + timeout
         last: Exception | None = None
         for ip in ips:
+            attempt_timeout = timeout
+            if deadline is not None:
+                remaining = deadline - self._clock()
+                if last is not None and remaining <= 0:
+                    break
+                # The first address is always tried; later ones only while time is left.
+                attempt_timeout = max(remaining, 0.0)
             try:
                 return await self._inner.connect_tcp(
                     ip,
                     port,
-                    timeout=timeout,
+                    timeout=attempt_timeout,
                     local_address=local_address,
                     socket_options=socket_options,
                 )
