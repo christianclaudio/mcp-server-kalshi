@@ -15,12 +15,12 @@ jobs:
     name: Check OpenAPI Drift
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
           # Full history and tags: the package version comes from the git tag.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7.6.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
         with:
           # Newest uv that meets pyproject.toml's [tool.uv] required-version (>=0.13.4, from
           # FastMCP's October 2026 certificate authority incident notice).
@@ -42,7 +42,7 @@ jobs:
         if: steps.drift.outputs.rc != '0'
         env:
           DRIFT_RC: ${{ steps.drift.outputs.rc }}
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
           script: |
             const fs = require('fs');
