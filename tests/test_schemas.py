@@ -58,13 +58,13 @@ def test_create_order_schema_required_and_enum():
 
 
 def test_schema_with_enum_class_ref_and_no_description():
-    from enum import Enum
+    from enum import StrEnum
 
     from pydantic import Field
 
     from mcp_server_kalshi.kalshi_client.schemas import MCPSchemaBaseModel
 
-    class ColorEnum(str, Enum):
+    class ColorEnum(StrEnum):
         RED = "red"
         BLUE = "blue"
 

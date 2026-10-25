@@ -3,7 +3,7 @@ name = "mcp-server-kalshi"
 dynamic = ["version"]
 description = "An MCP server implementation for Kalshi prediction market endpoints"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 
 dependencies = [
@@ -86,10 +86,10 @@ addopts = "-m 'not e2e'"
 [tool.black]
 # Match requires-python; without this Black infers every version up to 3.15 and
 # warns that its safety check cannot parse for that target.
-target-version = ["py310"]
+target-version = ["py311"]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 88
 
 [tool.ruff.lint]
@@ -99,7 +99,7 @@ select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 files = ["src/mcp_server_kalshi"]
 mypy_path = "src"
 strict = true
