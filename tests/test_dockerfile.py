@@ -227,13 +227,8 @@ def test_runtime_stage_copies_only_the_venv() -> None:
 def test_build_backend_stays_out_of_the_venv() -> None:
     """PYTHONPATH reaches the build backend only for the project install, never as an ENV."""
     builder = _stages()["builder"]
-    assert not any(
-        line.startswith("ENV ") and "PYTHONPATH" in line for line in builder
-    )
-    assert (
-        "--target /tmp/build-backend -r /tmp/build-backend.txt"
-        in _builder_install()
-    )
+    assert not any(line.startswith("ENV ") and "PYTHONPATH" in line for line in builder)
+    assert "--target /tmp/build-backend -r /tmp/build-backend.txt" in _builder_install()
 
 
 def test_uv_bootstrap_is_hash_pinned_and_meets_required_version() -> None:
