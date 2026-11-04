@@ -205,3 +205,16 @@ async def test_legacy_portfolio_orders_read_untouched(wire) -> None:
     await _call("list_orders", {})
     assert wire[-1].url.path == "/trade-api/v2/portfolio/orders"
     assert wire[-1].method == "GET"
+
+
+@pytest.mark.asyncio
+async def test_endpoint_costs_needs_no_credentials(make_client, monkeypatch) -> None:
+    """GET /account/endpoint_costs has no security block in the spec."""
+    client, requests = make_client(
+        lambda req: httpx.Response(200, json={"endpoints": []}),
+    )
+    monkeypatch.setattr(server, "kalshi_client", client)
+    result = await _call("get_account_endpoint_costs")
+    assert requests[-1].url.path == "/trade-api/v2/account/endpoint_costs"
+    assert "KALSHI-ACCESS-KEY" not in requests[-1].headers
+    assert result is not None

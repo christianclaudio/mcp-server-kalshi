@@ -457,7 +457,7 @@ class KalshiAPIClient(BaseAPIClient):
         """GET /live_data/batch — live data for multiple milestones."""
         return await self.get("/live_data/batch", params=params)
 
-    # ---- Account limits / costs (auth; OpenAPI v3.36.0) -----------------------
+    # ---- Account limits (auth) / endpoint costs (public; OpenAPI v3.36.0) -----
     async def get_account_limits(self) -> Any:
         """GET /account/limits — Predictions API tier and token-bucket limits."""
         self._require_auth()
@@ -465,7 +465,6 @@ class KalshiAPIClient(BaseAPIClient):
 
     async def get_account_endpoint_costs(self) -> Any:
         """GET /account/endpoint_costs — non-default endpoint token costs."""
-        self._require_auth()
         return await self.get("/account/endpoint_costs")
 
     # ---- Queue positions, deposits, withdrawals, subaccounts (auth) -----------

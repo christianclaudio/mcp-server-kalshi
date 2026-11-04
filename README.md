@@ -23,7 +23,7 @@ graph TD
 
 ---
 
-## 🚀 Highlights (36 Tools)
+## 🚀 Highlights (55 Tools)
 
 - **Discovery & Search** — `list_markets`, `get_market`, `list_events`, `get_event`, `list_series`, `get_series`, `get_tags_by_categories`, `get_sports_filters`.
 - **Research & Live Feeds** — `get_market_orderbook`, `get_market_candlesticks`, `batch_get_market_candlesticks`, `get_market_trades`, `get_event_live_data`, `get_live_data_batch`, `get_milestones`, `get_milestone`.

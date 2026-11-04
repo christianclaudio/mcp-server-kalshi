@@ -77,7 +77,7 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 
 ---
 
-## 3. Tool Annotations (36 Tools)
+## 3. Tool Annotations (55 Tools)
 
 | Tool Name | Type / Scope | `readOnlyHint` | `destructiveHint` | `idempotentHint` | `openWorldHint` |
 | :--- | :--- | :---: | :---: | :---: | :---: |
