@@ -235,6 +235,121 @@ EXPECTED_ANNOTATIONS: dict[str, dict[str, Any]] = {
         "idempotent": True,
         "openWorld": False,
     },
+    # Spec v3.36.0 historical / batch / account / portfolio reads
+    "get_historical_cutoff": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "list_historical_markets": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_historical_market": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_historical_market_candlesticks": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_historical_trades": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_historical_fills": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "list_historical_orders": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_historical_positions": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "batch_get_market_candlesticks": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_live_data_batch": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_account_limits": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_account_endpoint_costs": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_order_queue_positions": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_order_queue_position": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "list_deposits": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "list_withdrawals": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_subaccount_balances": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "list_subaccount_transfers": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_subaccount_netting": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
 }
 
 

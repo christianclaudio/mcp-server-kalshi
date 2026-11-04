@@ -117,6 +117,25 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 | `batch_cancel_orders` | Trading | `false` | `true` | `true` | `false` |
 | `list_order_groups` | Risk / Groups | `true` | `false` | `true` | `false` |
 | `cancel_order_group` | Risk / Groups | `false` | `true` | `true` | `false` |
+| `get_historical_cutoff` | Historical | `true` | `false` | `true` | `false` |
+| `list_historical_markets` | Historical | `true` | `false` | `true` | `false` |
+| `get_historical_market` | Historical | `true` | `false` | `true` | `false` |
+| `get_historical_market_candlesticks` | Historical | `true` | `false` | `true` | `false` |
+| `get_historical_trades` | Historical | `true` | `false` | `true` | `false` |
+| `get_historical_fills` | Historical | `true` | `false` | `true` | `false` |
+| `list_historical_orders` | Historical | `true` | `false` | `true` | `false` |
+| `get_historical_positions` | Historical | `true` | `false` | `true` | `false` |
+| `batch_get_market_candlesticks` | Research | `true` | `false` | `true` | `false` |
+| `get_live_data_batch` | Live Data | `true` | `false` | `true` | `false` |
+| `get_account_limits` | Account | `true` | `false` | `true` | `false` |
+| `get_account_endpoint_costs` | Account | `true` | `false` | `true` | `false` |
+| `get_order_queue_positions` | Orders | `true` | `false` | `true` | `false` |
+| `get_order_queue_position` | Orders | `true` | `false` | `true` | `false` |
+| `list_deposits` | Portfolio | `true` | `false` | `true` | `false` |
+| `list_withdrawals` | Portfolio | `true` | `false` | `true` | `false` |
+| `get_subaccount_balances` | Portfolio | `true` | `false` | `true` | `false` |
+| `list_subaccount_transfers` | Portfolio | `true` | `false` | `true` | `false` |
+| `get_subaccount_netting` | Portfolio | `true` | `false` | `true` | `false` |
 
 ---
 

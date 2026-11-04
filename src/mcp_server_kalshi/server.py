@@ -42,16 +42,26 @@ from mcp_server_kalshi.kalshi_client.schemas import (
     AmendOrderRequest,
     BatchCancelOrdersRequest,
     BatchCreateOrdersRequest,
+    BatchGetMarketCandlesticksRequest,
     CancelOrderGroupRequest,
     CancelOrderRequest,
     CreateOrderRequest,
     DecreaseOrderRequest,
     EmptyRequest,
     FetchRulesPdfRequest,
+    GetAccountEndpointCostsRequest,
+    GetAccountLimitsRequest,
     GetBalanceRequest,
     GetEventLiveDataRequest,
     GetEventRequest,
     GetFillsRequest,
+    GetHistoricalCutoffRequest,
+    GetHistoricalFillsRequest,
+    GetHistoricalMarketCandlesticksRequest,
+    GetHistoricalMarketRequest,
+    GetHistoricalPositionsRequest,
+    GetHistoricalTradesRequest,
+    GetLiveDataBatchRequest,
     GetMarketCandlesticksRequest,
     GetMarketOrderbookRequest,
     GetMarketRequest,
@@ -60,19 +70,28 @@ from mcp_server_kalshi.kalshi_client.schemas import (
     GetMilestoneRequest,
     GetMilestonesRequest,
     GetMultivariateCollectionRequest,
+    GetOrderQueuePositionRequest,
+    GetOrderQueuePositionsRequest,
     GetOrderRequest,
     GetPositionsRequest,
     GetSeriesRequest,
     GetSettlementsRequest,
+    GetSubaccountBalancesRequest,
+    GetSubaccountNettingRequest,
     GetSportsFiltersRequest,
     GetTagsByCategoriesRequest,
     GetTotalRestingOrderValueRequest,
+    ListDepositsRequest,
     ListEventsRequest,
+    ListHistoricalMarketsRequest,
+    ListHistoricalOrdersRequest,
     ListMarketsRequest,
     ListMultivariateCollectionsRequest,
     ListOrderGroupsRequest,
     ListOrdersRequest,
     ListSeriesRequest,
+    ListSubaccountTransfersRequest,
+    ListWithdrawalsRequest,
     MCPSchemaBaseModel,
 )
 from mcp_server_kalshi.ssrf import validate_pdf_url
@@ -1295,6 +1314,327 @@ async def handle_cancel_order_group(request: dict[str, Any]) -> Any:
 # =============================== Server wiring ===============================
 async def handle_list_tools() -> list[types.Tool]:
     return ToolRegistry.get_tools()
+
+
+# ===================== Spec v3.36.0 reads (historical/batch/account) ==========
+@ToolRegistry.register_tool(
+    name="get_historical_cutoff",
+    description=(
+        "Get historical archive cutoff timestamps (GET /historical/cutoff). Use these "
+        "to route markets, trades, fills, orders, and positions between live and "
+        "historical endpoints."
+    ),
+    input_schema=GetHistoricalCutoffRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_historical_cutoff(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_historical_cutoff()
+
+
+@ToolRegistry.register_tool(
+    name="list_historical_markets",
+    description=(
+        "List markets archived to the historical database (GET /historical/markets). "
+        "Filters are mutually exclusive."
+    ),
+    input_schema=ListHistoricalMarketsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_historical_markets(request: dict[str, Any]) -> Any:
+    return await kalshi_client.list_historical_markets(
+        _params(request, ListHistoricalMarketsRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_historical_market",
+    description="Get one archived market by ticker (GET /historical/markets/{ticker}).",
+    input_schema=GetHistoricalMarketRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_historical_market(request: dict[str, Any]) -> Any:
+    req = GetHistoricalMarketRequest(**request)
+    return await kalshi_client.get_historical_market(req.ticker)
+
+
+@ToolRegistry.register_tool(
+    name="get_historical_market_candlesticks",
+    description=(
+        "Get candlesticks for an archived market "
+        "(GET /historical/markets/{ticker}/candlesticks). period_interval: 1, 60, or 1440."
+    ),
+    input_schema=GetHistoricalMarketCandlesticksRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_historical_market_candlesticks(request: dict[str, Any]) -> Any:
+    req = GetHistoricalMarketCandlesticksRequest(**request)
+    return await kalshi_client.get_historical_market_candlesticks(
+        ticker=req.ticker,
+        start_ts=req.start_ts,
+        end_ts=req.end_ts,
+        period_interval=req.period_interval,
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_historical_trades",
+    description=(
+        "Get public trades older than the historical cutoff (GET /historical/trades)."
+    ),
+    input_schema=GetHistoricalTradesRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_historical_trades(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_historical_trades(
+        _params(request, GetHistoricalTradesRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_historical_fills",
+    description=(
+        "Get authenticated fills older than the historical cutoff "
+        "(GET /historical/fills)."
+    ),
+    input_schema=GetHistoricalFillsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_historical_fills(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_historical_fills(
+        _params(request, GetHistoricalFillsRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="list_historical_orders",
+    description=(
+        "List canceled/executed orders archived to historical storage "
+        "(GET /historical/orders). Resting orders stay on list_orders."
+    ),
+    input_schema=ListHistoricalOrdersRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_historical_orders(request: dict[str, Any]) -> Any:
+    return await kalshi_client.list_historical_orders(
+        _params(request, ListHistoricalOrdersRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_historical_positions",
+    description=(
+        "Get settled positions after live-to-historical handoff "
+        "(GET /historical/positions)."
+    ),
+    input_schema=GetHistoricalPositionsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_historical_positions(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_historical_positions(
+        _params(request, GetHistoricalPositionsRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="batch_get_market_candlesticks",
+    description=(
+        "Batch-get candlesticks for up to 100 markets (GET /markets/candlesticks)."
+    ),
+    input_schema=BatchGetMarketCandlesticksRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_batch_get_market_candlesticks(request: dict[str, Any]) -> Any:
+    return await kalshi_client.batch_get_market_candlesticks(
+        _params(request, BatchGetMarketCandlesticksRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_live_data_batch",
+    description=(
+        "Get live data for multiple milestones (GET /live_data/batch). Pass up to 100 "
+        "milestone_ids."
+    ),
+    input_schema=GetLiveDataBatchRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_live_data_batch(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_live_data_batch(
+        _params(request, GetLiveDataBatchRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_account_limits",
+    description=(
+        "Get Predictions API usage tier and token-bucket limits (GET /account/limits)."
+    ),
+    input_schema=GetAccountLimitsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_account_limits(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_account_limits()
+
+
+@ToolRegistry.register_tool(
+    name="get_account_endpoint_costs",
+    description=(
+        "List API v2 endpoints whose token cost differs from the default "
+        "(GET /account/endpoint_costs)."
+    ),
+    input_schema=GetAccountEndpointCostsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_account_endpoint_costs(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_account_endpoint_costs()
+
+
+@ToolRegistry.register_tool(
+    name="get_order_queue_positions",
+    description=(
+        "Get queue positions for resting orders "
+        "(GET /portfolio/orders/queue_positions)."
+    ),
+    input_schema=GetOrderQueuePositionsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_order_queue_positions(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_order_queue_positions(
+        _params(request, GetOrderQueuePositionsRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_order_queue_position",
+    description=(
+        "Get one order queue position "
+        "(GET /portfolio/orders/{order_id}/queue_position)."
+    ),
+    input_schema=GetOrderQueuePositionRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_order_queue_position(request: dict[str, Any]) -> Any:
+    req = GetOrderQueuePositionRequest(**request)
+    return await kalshi_client.get_order_queue_position(req.order_id)
+
+
+@ToolRegistry.register_tool(
+    name="list_deposits",
+    description="Get deposit history (GET /portfolio/deposits).",
+    input_schema=ListDepositsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_deposits(request: dict[str, Any]) -> Any:
+    return await kalshi_client.list_deposits(_params(request, ListDepositsRequest))
+
+
+@ToolRegistry.register_tool(
+    name="list_withdrawals",
+    description="Get withdrawal history (GET /portfolio/withdrawals).",
+    input_schema=ListWithdrawalsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_withdrawals(request: dict[str, Any]) -> Any:
+    return await kalshi_client.list_withdrawals(
+        _params(request, ListWithdrawalsRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_subaccount_balances",
+    description=(
+        "Get balances for all subaccounts including primary "
+        "(GET /portfolio/subaccounts/balances)."
+    ),
+    input_schema=GetSubaccountBalancesRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_subaccount_balances(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_subaccount_balances()
+
+
+@ToolRegistry.register_tool(
+    name="list_subaccount_transfers",
+    description=(
+        "List transfers between subaccounts (GET /portfolio/subaccounts/transfers)."
+    ),
+    input_schema=ListSubaccountTransfersRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_subaccount_transfers(request: dict[str, Any]) -> Any:
+    return await kalshi_client.list_subaccount_transfers(
+        _params(request, ListSubaccountTransfersRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_subaccount_netting",
+    description=(
+        "Get netting-enabled settings for all subaccounts "
+        "(GET /portfolio/subaccounts/netting)."
+    ),
+    input_schema=GetSubaccountNettingRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_subaccount_netting(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_subaccount_netting()
 
 
 async def handle_call_tool(

@@ -45,7 +45,7 @@ class MCPSchemaBaseModel(BaseModel):
 
 
 def _page_limit(maximum: int, *, minimum: int = 1) -> Any:
-    """Optional page size bounded by the endpoint's own OpenAPI v3.34.0 limits."""
+    """Optional page size bounded by the endpoint's own OpenAPI v3.36.0 limits."""
     return Field(
         default=None,
         ge=minimum,
@@ -63,7 +63,7 @@ class _Paginated(MCPSchemaBaseModel):
     )
 
 
-# Shared optional portfolio scoping fields (Kalshi OpenAPI v3.34.0). Omitted unless set,
+# Shared optional portfolio scoping fields (Kalshi OpenAPI v3.36.0). Omitted unless set,
 # so requests that do not pass them are unchanged.
 _SUBACCOUNT_ALL = (
     "Subaccount number (0 for primary, 1-63 for subaccounts). Omit for all subaccounts."
@@ -174,7 +174,7 @@ class GetEventRequest(MCPSchemaBaseModel):
 
     @model_validator(mode="after")
     def _exclusive_market_flags(self) -> "GetEventRequest":
-        # Kalshi OpenAPI v3.34.0, GET /events/{event_ticker}: exclude_markets "Cannot be
+        # Kalshi OpenAPI v3.36.0, GET /events/{event_ticker}: exclude_markets "Cannot be
         # combined with with_nested_markets=true".
         if self.exclude_markets and self.with_nested_markets:
             raise ValueError(
@@ -691,7 +691,7 @@ class GetMultivariateCollectionRequest(MCPSchemaBaseModel):
 class ListOrderGroupsRequest(MCPSchemaBaseModel):
     """List order groups: groups with a contracts limit over a rolling 15-second window that cancel all their orders when the limit is hit.
 
-    ``limit`` and ``cursor`` predate Kalshi OpenAPI v3.34.0, which documents only
+    ``limit`` and ``cursor`` predate Kalshi OpenAPI v3.36.0, which documents only
     ``subaccount`` on GET /portfolio/order_groups. They are kept for compatibility and
     still sent as before.
     """
@@ -722,3 +722,188 @@ class CancelOrderGroupRequest(MCPSchemaBaseModel):
         default=False,
         description="Must be true to cancel the order group. False returns a preview only.",
     )
+
+
+# ---- Historical (OpenAPI v3.36.0) ----------------------------------------------
+class GetHistoricalCutoffRequest(EmptyRequest):
+    """GET /historical/cutoff — archive cutoff timestamps."""
+
+
+class ListHistoricalMarketsRequest(_Paginated):
+    """GET /historical/markets — archived markets (filters mutually exclusive)."""
+
+    limit: int | None = _page_limit(1000, minimum=0)
+    tickers: str | None = Field(
+        default=None,
+        description="Comma-separated market tickers to retrieve.",
+    )
+    event_ticker: str | None = Field(
+        default=None, description="Filter by a single event ticker."
+    )
+    series_ticker: str | None = Field(
+        default=None, description="Filter by series ticker."
+    )
+    mve_filter: Literal["exclude"] | None = Field(
+        default=None,
+        description="Set to exclude to omit multivariate (combo) markets.",
+    )
+
+
+class GetHistoricalMarketRequest(MCPSchemaBaseModel):
+    ticker: str = Field(..., description="Market ticker in the historical archive.")
+
+
+class GetHistoricalMarketCandlesticksRequest(MCPSchemaBaseModel):
+    ticker: str = Field(..., description="Historical market ticker.")
+    start_ts: int = Field(
+        ..., description="Start Unix timestamp (candles ending on/after)."
+    )
+    end_ts: int = Field(
+        ..., description="End Unix timestamp (candles ending on/before)."
+    )
+    period_interval: Literal[1, 60, 1440] = Field(
+        ...,
+        description="Candle length in minutes: 1, 60, or 1440.",
+    )
+
+
+class GetHistoricalTradesRequest(_Paginated):
+    """GET /historical/trades — public trades older than the cutoff."""
+
+    limit: int | None = _page_limit(1000, minimum=0)
+    ticker: str | None = Field(default=None, description="Filter by market ticker.")
+    min_ts: int | None = Field(
+        default=None, description="Only trades after this Unix ts."
+    )
+    max_ts: int | None = Field(
+        default=None, description="Only trades before this Unix ts."
+    )
+    is_block_trade: bool | None = Field(
+        default=None,
+        description="true=only block trades; false=only non-block; omit=all.",
+    )
+
+
+class GetHistoricalFillsRequest(_Paginated):
+    """GET /historical/fills — authenticated fills older than the cutoff."""
+
+    ticker: str | None = Field(default=None, description="Filter by market ticker.")
+    min_ts: int | None = Field(
+        default=None, description="Only fills after this Unix ts."
+    )
+    max_ts: int | None = Field(
+        default=None, description="Only fills before this Unix ts."
+    )
+    subaccount: int | None = Field(default=None, ge=0, description=_SUBACCOUNT_ALL)
+
+
+class ListHistoricalOrdersRequest(_Paginated):
+    """GET /historical/orders — archived canceled/executed orders."""
+
+    ticker: str | None = Field(default=None, description="Filter by market ticker.")
+    min_ts: int | None = Field(
+        default=None, description="Only orders after this Unix ts."
+    )
+    max_ts: int | None = Field(
+        default=None, description="Only orders before this Unix ts."
+    )
+    subaccount: int | None = Field(default=None, ge=0, description=_SUBACCOUNT_ALL)
+
+
+class GetHistoricalPositionsRequest(_Paginated):
+    """GET /historical/positions — settled positions after live-to-historical handoff."""
+
+    ticker: str | None = Field(default=None, description="Filter by market ticker.")
+    event_ticker: str | None = Field(
+        default=None, description="Filter by a single event ticker."
+    )
+    subaccount: int | None = Field(default=None, ge=0, description=_SUBACCOUNT_PRIMARY)
+
+
+# ---- Batch market / live data (OpenAPI v3.36.0) --------------------------------
+class BatchGetMarketCandlesticksRequest(MCPSchemaBaseModel):
+    """GET /markets/candlesticks — candlesticks for up to 100 market tickers."""
+
+    market_tickers: str = Field(
+        ...,
+        description="Comma-separated market tickers (maximum 100).",
+    )
+    start_ts: int = Field(..., description="Start timestamp in Unix seconds.")
+    end_ts: int = Field(..., description="End timestamp in Unix seconds.")
+    period_interval: int = Field(
+        ...,
+        ge=1,
+        description="Candlestick period interval in minutes.",
+    )
+    include_latest_before_start: bool | None = Field(
+        default=None,
+        description="If true, prepend a synthetic candle before start_ts.",
+    )
+
+
+class GetLiveDataBatchRequest(MCPSchemaBaseModel):
+    """GET /live_data/batch — live data for multiple milestones."""
+
+    milestone_ids: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Milestone IDs to fetch (1-100).",
+    )
+    include_player_stats: bool | None = Field(
+        default=None,
+        description="When true, include player-level stats where supported.",
+    )
+
+
+# ---- Account API limits / costs (OpenAPI v3.36.0) ------------------------------
+class GetAccountLimitsRequest(EmptyRequest):
+    """GET /account/limits — Predictions API tier and token-bucket limits."""
+
+
+class GetAccountEndpointCostsRequest(EmptyRequest):
+    """GET /account/endpoint_costs — non-default endpoint token costs."""
+
+
+# ---- Queue position, deposits, withdrawals, subaccounts ------------------------
+class GetOrderQueuePositionsRequest(MCPSchemaBaseModel):
+    """GET /portfolio/orders/queue_positions — queue depth for resting orders."""
+
+    market_tickers: str | None = Field(
+        default=None,
+        description="Comma-separated market tickers to filter by.",
+    )
+    event_ticker: str | None = Field(
+        default=None, description="Event ticker to filter by."
+    )
+    subaccount: int | None = Field(default=None, ge=0, description=_SUBACCOUNT_PRIMARY)
+
+
+class GetOrderQueuePositionRequest(MCPSchemaBaseModel):
+    """GET /portfolio/orders/{order_id}/queue_position."""
+
+    order_id: str = Field(..., description="The resting order id.")
+
+
+class ListDepositsRequest(_Paginated):
+    """GET /portfolio/deposits — deposit history."""
+
+    limit: int | None = _page_limit(500)
+
+
+class ListWithdrawalsRequest(_Paginated):
+    """GET /portfolio/withdrawals — withdrawal history."""
+
+    limit: int | None = _page_limit(500)
+
+
+class GetSubaccountBalancesRequest(EmptyRequest):
+    """GET /portfolio/subaccounts/balances — balances for all subaccounts."""
+
+
+class ListSubaccountTransfersRequest(_Paginated):
+    """GET /portfolio/subaccounts/transfers — transfers between subaccounts."""
+
+
+class GetSubaccountNettingRequest(EmptyRequest):
+    """GET /portfolio/subaccounts/netting — netting settings for subaccounts."""

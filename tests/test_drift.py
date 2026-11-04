@@ -183,6 +183,64 @@ paths:
   /portfolio/order_groups/{order_group_id}:
     delete:
       parameters: []
+
+  /historical/cutoff:
+    get:
+      parameters: []
+  /historical/markets:
+    get:
+      parameters: []
+  /historical/markets/{ticker}:
+    get:
+      parameters: []
+  /historical/markets/{ticker}/candlesticks:
+    get:
+      parameters: []
+  /historical/trades:
+    get:
+      parameters: []
+  /historical/fills:
+    get:
+      parameters: []
+  /historical/orders:
+    get:
+      parameters: []
+  /historical/positions:
+    get:
+      parameters: []
+  /markets/candlesticks:
+    get:
+      parameters: []
+  /live_data/batch:
+    get:
+      parameters: []
+  /account/limits:
+    get:
+      parameters: []
+  /account/endpoint_costs:
+    get:
+      parameters: []
+  /portfolio/orders/queue_positions:
+    get:
+      parameters: []
+  /portfolio/orders/{order_id}/queue_position:
+    get:
+      parameters: []
+  /portfolio/deposits:
+    get:
+      parameters: []
+  /portfolio/withdrawals:
+    get:
+      parameters: []
+  /portfolio/subaccounts/balances:
+    get:
+      parameters: []
+  /portfolio/subaccounts/transfers:
+    get:
+      parameters: []
+  /portfolio/subaccounts/netting:
+    get:
+      parameters: []
 """)
 
     code = check_drift(local_spec=mock_spec_file)
