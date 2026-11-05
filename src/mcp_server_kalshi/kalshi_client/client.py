@@ -392,3 +392,118 @@ class KalshiAPIClient(BaseAPIClient):
         self._require_auth()
         quoted = urllib.parse.quote(order_group_id, safe="")
         return await self.delete(f"/portfolio/order_groups/{quoted}", params=params)
+
+    # ---- Historical (auth where noted; OpenAPI v3.36.0) -----------------------
+    async def get_historical_cutoff(self) -> Any:
+        """GET /historical/cutoff — archive cutoff timestamps."""
+        return await self.get("/historical/cutoff")
+
+    async def list_historical_markets(
+        self, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /historical/markets — archived markets."""
+        return await self.get("/historical/markets", params=params)
+
+    async def get_historical_market(self, ticker: str) -> Any:
+        """GET /historical/markets/{ticker}."""
+        quoted = urllib.parse.quote(ticker, safe="")
+        return await self.get(f"/historical/markets/{quoted}")
+
+    async def get_historical_market_candlesticks(
+        self,
+        ticker: str,
+        start_ts: int,
+        end_ts: int,
+        period_interval: int,
+    ) -> Any:
+        """GET /historical/markets/{ticker}/candlesticks."""
+        quoted = urllib.parse.quote(ticker, safe="")
+        params = {
+            "start_ts": start_ts,
+            "end_ts": end_ts,
+            "period_interval": period_interval,
+        }
+        return await self.get(
+            f"/historical/markets/{quoted}/candlesticks", params=params
+        )
+
+    async def get_historical_trades(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /historical/trades — public trades older than the cutoff."""
+        return await self.get("/historical/trades", params=params)
+
+    async def get_historical_fills(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /historical/fills — authenticated fills older than the cutoff."""
+        self._require_auth()
+        return await self.get("/historical/fills", params=params)
+
+    async def list_historical_orders(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /historical/orders — archived canceled/executed orders."""
+        self._require_auth()
+        return await self.get("/historical/orders", params=params)
+
+    async def get_historical_positions(
+        self, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /historical/positions — settled positions after archival handoff."""
+        self._require_auth()
+        return await self.get("/historical/positions", params=params)
+
+    # ---- Batch candlesticks & live data (OpenAPI v3.36.0) ---------------------
+    async def batch_get_market_candlesticks(self, params: dict[str, Any]) -> Any:
+        """GET /markets/candlesticks — candlesticks for many markets."""
+        return await self.get("/markets/candlesticks", params=params)
+
+    async def get_live_data_batch(self, params: dict[str, Any]) -> Any:
+        """GET /live_data/batch — live data for multiple milestones."""
+        return await self.get("/live_data/batch", params=params)
+
+    # ---- Account limits (auth) / endpoint costs (public; OpenAPI v3.36.0) -----
+    async def get_account_limits(self) -> Any:
+        """GET /account/limits — Predictions API tier and token-bucket limits."""
+        self._require_auth()
+        return await self.get("/account/limits")
+
+    async def get_account_endpoint_costs(self) -> Any:
+        """GET /account/endpoint_costs — non-default endpoint token costs."""
+        return await self.get("/account/endpoint_costs")
+
+    # ---- Queue positions, deposits, withdrawals, subaccounts (auth) -----------
+    async def get_order_queue_positions(
+        self, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /portfolio/orders/queue_positions."""
+        self._require_auth()
+        return await self.get("/portfolio/orders/queue_positions", params=params)
+
+    async def get_order_queue_position(self, order_id: str) -> Any:
+        """GET /portfolio/orders/{order_id}/queue_position."""
+        self._require_auth()
+        quoted = urllib.parse.quote(order_id, safe="")
+        return await self.get(f"/portfolio/orders/{quoted}/queue_position")
+
+    async def list_deposits(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /portfolio/deposits."""
+        self._require_auth()
+        return await self.get("/portfolio/deposits", params=params)
+
+    async def list_withdrawals(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /portfolio/withdrawals."""
+        self._require_auth()
+        return await self.get("/portfolio/withdrawals", params=params)
+
+    async def get_subaccount_balances(self) -> Any:
+        """GET /portfolio/subaccounts/balances."""
+        self._require_auth()
+        return await self.get("/portfolio/subaccounts/balances")
+
+    async def list_subaccount_transfers(
+        self, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /portfolio/subaccounts/transfers."""
+        self._require_auth()
+        return await self.get("/portfolio/subaccounts/transfers", params=params)
+
+    async def get_subaccount_netting(self) -> Any:
+        """GET /portfolio/subaccounts/netting."""
+        self._require_auth()
+        return await self.get("/portfolio/subaccounts/netting")

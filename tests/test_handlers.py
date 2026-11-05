@@ -54,6 +54,26 @@ EXPECTED_TOOLS = {
     "get_multivariate_collection",
     "list_order_groups",
     "cancel_order_group",
+    # spec v3.36.0 reads
+    "get_historical_cutoff",
+    "list_historical_markets",
+    "get_historical_market",
+    "get_historical_market_candlesticks",
+    "get_historical_trades",
+    "get_historical_fills",
+    "list_historical_orders",
+    "get_historical_positions",
+    "batch_get_market_candlesticks",
+    "get_live_data_batch",
+    "get_account_limits",
+    "get_account_endpoint_costs",
+    "get_order_queue_positions",
+    "get_order_queue_position",
+    "list_deposits",
+    "list_withdrawals",
+    "get_subaccount_balances",
+    "list_subaccount_transfers",
+    "get_subaccount_netting",
 }
 
 

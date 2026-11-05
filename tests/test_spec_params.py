@@ -1,4 +1,4 @@
-"""Optional query/body params added from the Kalshi OpenAPI spec (v3.34.0).
+"""Optional query/body params added from the Kalshi OpenAPI spec (v3.36.0).
 
 Source: https://docs.kalshi.com/openapi.yaml and https://docs.kalshi.com/changelog
 (accessed 2026-10-21). Each test drives a tool handler through the real

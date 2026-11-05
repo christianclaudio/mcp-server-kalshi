@@ -5,4 +5,4 @@
 #
 # Format: METHOD /path/with/{}/placeholders  # justification
 
-# No entries: every route the client calls is in Kalshi's OpenAPI spec (v3.34.0).
+# No entries: every route the client calls is in Kalshi's OpenAPI spec (v3.36.0).
