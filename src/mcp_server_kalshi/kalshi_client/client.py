@@ -507,3 +507,27 @@ class KalshiAPIClient(BaseAPIClient):
         """GET /portfolio/subaccounts/netting."""
         self._require_auth()
         return await self.get("/portfolio/subaccounts/netting")
+
+    # ---- RFQ batches (auth; OpenAPI v3.36.0) ---------------------------------
+    async def list_rfq_batches(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /communications/rfq_batches — batches with their child RFQs."""
+        self._require_auth()
+        return await self.get("/communications/rfq_batches", params=params)
+
+    async def get_rfq_batch(self, rfq_batch_id: str) -> Any:
+        """GET /communications/rfq_batches/{rfq_batch_id}."""
+        self._require_auth()
+        quoted = urllib.parse.quote(rfq_batch_id, safe="")
+        return await self.get(f"/communications/rfq_batches/{quoted}")
+
+    async def get_rfq_batch_best_quotes(self, rfq_batch_id: str) -> Any:
+        """GET /communications/rfq_batches/{rfq_batch_id}/best_quotes."""
+        self._require_auth()
+        quoted = urllib.parse.quote(rfq_batch_id, safe="")
+        return await self.get(f"/communications/rfq_batches/{quoted}/best_quotes")
+
+    async def get_rfq_batch_quotes(self, rfq_batch_id: str) -> Any:
+        """GET /communications/rfq_batches/{rfq_batch_id}/quotes."""
+        self._require_auth()
+        quoted = urllib.parse.quote(rfq_batch_id, safe="")
+        return await self.get(f"/communications/rfq_batches/{quoted}/quotes")

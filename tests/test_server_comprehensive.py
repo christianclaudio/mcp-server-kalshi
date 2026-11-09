@@ -398,7 +398,7 @@ def test_readonly_mode_filtering(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "batch_create_orders" not in tool_names
     assert "batch_cancel_orders" not in tool_names
     assert "cancel_order_group" not in tool_names
-    assert len(tools) == 48
+    assert len(tools) == 52
 
     # Handler lookup for read-only tool in readonly mode succeeds
     handler = server.ToolRegistry.get_handler("list_markets")
@@ -666,7 +666,7 @@ async def test_fastmcp_version_and_tools(monkeypatch: pytest.MonkeyPatch) -> Non
 
     monkeypatch.setattr(server.settings, "KALSHI_READONLY", True)
     ro_tools = await server.mcp.list_tools()
-    assert len(ro_tools) == 48
+    assert len(ro_tools) == 52
 
     server.mcp.add_request_handler(
         "test/ping", server.types.PaginatedRequestParams, AsyncMock()
