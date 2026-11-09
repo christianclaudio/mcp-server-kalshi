@@ -1649,7 +1649,8 @@ async def handle_get_subaccount_netting(request: dict[str, Any]) -> Any:
         "in request order (GET /communications/rfq_batches). A page holds at most "
         "limit batches (1-20, default 20) and stops before its child RFQs would "
         "exceed 100. Pass cursors back unchanged. user_filter=self lists only "
-        "your batches."
+        "your batches. Kalshi lists this endpoint in its OpenAPI spec but hides "
+        "it from the published docs until RFQ batches launch."
     ),
     input_schema=ListRFQBatchesRequest,
     read_only=True,
@@ -1665,7 +1666,9 @@ async def handle_list_rfq_batches(request: dict[str, Any]) -> Any:
     name="get_rfq_batch",
     description=(
         "Get one RFQ batch, with its child RFQs in request order "
-        "(GET /communications/rfq_batches/{rfq_batch_id})."
+        "(GET /communications/rfq_batches/{rfq_batch_id}). Kalshi lists this "
+        "endpoint in its OpenAPI spec but hides it from the published docs until "
+        "RFQ batches launch."
     ),
     input_schema=GetRFQBatchRequest,
     read_only=True,
@@ -1684,7 +1687,8 @@ async def handle_get_rfq_batch(request: dict[str, Any]) -> Any:
         "Get the best open bid on each side of every child of your RFQ batch "
         "(GET /communications/rfq_batches/{rfq_batch_id}/best_quotes). Makers are "
         "not identified. Only the batch creator can read these, and a batch that "
-        "is no longer open has none."
+        "is no longer open has none. Kalshi lists this endpoint in its OpenAPI "
+        "spec but hides it from the published docs until RFQ batches launch."
     ),
     input_schema=GetRFQBatchBestQuotesRequest,
     read_only=True,
@@ -1704,7 +1708,9 @@ async def handle_get_rfq_batch_best_quotes(request: dict[str, Any]) -> Any:
         "(GET /communications/rfq_batches/{rfq_batch_id}/quotes). A maker sees "
         "its own batch quote; once the batch is accepted, only the children that "
         "maker won. The creator sees each winning maker's quotes after accept, "
-        "and uses get_rfq_batch_best_quotes while the batch is open."
+        "and uses get_rfq_batch_best_quotes while the batch is open. Kalshi lists "
+        "this endpoint in its OpenAPI spec but hides it from the published docs "
+        "until RFQ batches launch."
     ),
     input_schema=GetRFQBatchQuotesRequest,
     read_only=True,

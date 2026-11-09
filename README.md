@@ -31,7 +31,7 @@ graph TD
 - **Multivariate & Parlays** — `list_multivariate_collections`, `get_multivariate_collection`.
 - **Exchange & Status** — `get_exchange_status`, `get_exchange_schedule`, `get_environment`.
 - **Historical archive** — `get_historical_cutoff`, historical markets/candlesticks/trades/fills/orders/positions.
-- **RFQ batches** — `list_rfq_batches`, `get_rfq_batch`, `get_rfq_batch_best_quotes`, `get_rfq_batch_quotes` (authenticated communications reads).
+- **RFQ batches** — `list_rfq_batches`, `get_rfq_batch`, `get_rfq_batch_best_quotes`, `get_rfq_batch_quotes` (authenticated communications reads). Kalshi lists these endpoints in its OpenAPI spec but hides them from the published docs until RFQ batches launch.
 - **Portfolio & Exposure** — `get_balance`, `get_total_resting_order_value` (FCM members only; regular accounts get 403), `get_positions`, `get_fills`, `get_settlements`, `list_deposits`, `list_withdrawals`, subaccount balance/transfer/netting reads, queue positions, and account limits/endpoint costs.
 - **Trading & Execution** — `create_order`, `cancel_order`, `amend_order`, `decrease_order`, `batch_create_orders`, `batch_cancel_orders`, `list_orders`, `get_order`.
 - **Risk Management & Order Groups** — `list_order_groups`, `cancel_order_group` (groups that cancel their orders when a rolling 15-second contracts limit is hit). `list_order_groups` keeps its `limit` and `cursor` inputs for compatibility, though Kalshi's OpenAPI spec (v3.34.0) documents only `subaccount` on that endpoint.
