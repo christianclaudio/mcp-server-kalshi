@@ -350,6 +350,31 @@ EXPECTED_ANNOTATIONS: dict[str, dict[str, Any]] = {
         "idempotent": True,
         "openWorld": False,
     },
+    # Spec v3.36.0 communications / rfq batch reads
+    "list_rfq_batches": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_rfq_batch": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_rfq_batch_best_quotes": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
+    "get_rfq_batch_quotes": {
+        "readOnly": True,
+        "destructive": False,
+        "idempotent": True,
+        "openWorld": False,
+    },
 }
 
 

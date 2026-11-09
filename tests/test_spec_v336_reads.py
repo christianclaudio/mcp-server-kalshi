@@ -11,8 +11,10 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from mcp_server_kalshi import server
+from mcp_server_kalshi.kalshi_client.schemas import ListRFQBatchesRequest
 
 
 @pytest.fixture
@@ -37,6 +39,10 @@ def client(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     mock.get_subaccount_balances.return_value = {"balances": []}
     mock.list_subaccount_transfers.return_value = {"transfers": []}
     mock.get_subaccount_netting.return_value = {"netting": []}
+    mock.list_rfq_batches.return_value = {"rfq_batches": []}
+    mock.get_rfq_batch.return_value = {"rfq_batch": {}}
+    mock.get_rfq_batch_best_quotes.return_value = {"best_quotes": []}
+    mock.get_rfq_batch_quotes.return_value = {"quotes": []}
     monkeypatch.setattr(server, "kalshi_client", mock)
     return mock
 
@@ -218,3 +224,124 @@ async def test_endpoint_costs_needs_no_credentials(make_client, monkeypatch) -> 
     assert requests[-1].url.path == "/trade-api/v2/account/endpoint_costs"
     assert "KALSHI-ACCESS-KEY" not in requests[-1].headers
     assert result is not None
+
+
+_BATCH_ID = "11111111-1111-1111-1111-111111111111"
+
+
+@pytest.mark.asyncio
+async def test_rfq_batch_read_handlers_call_client(client: AsyncMock) -> None:
+    await _call(
+        "list_rfq_batches",
+        {
+            "limit": 5,
+            "cursor": "c",
+            "status": "open",
+            "user_filter": "self",
+            "subaccount": 2,
+        },
+    )
+    client.list_rfq_batches.assert_awaited_once_with(
+        {
+            "limit": 5,
+            "cursor": "c",
+            "status": "open",
+            "user_filter": "self",
+            "subaccount": 2,
+        }
+    )
+
+    await _call("get_rfq_batch", {"rfq_batch_id": _BATCH_ID})
+    client.get_rfq_batch.assert_awaited_once_with(_BATCH_ID)
+
+    await _call("get_rfq_batch_best_quotes", {"rfq_batch_id": _BATCH_ID})
+    client.get_rfq_batch_best_quotes.assert_awaited_once_with(_BATCH_ID)
+
+    await _call("get_rfq_batch_quotes", {"rfq_batch_id": _BATCH_ID})
+    client.get_rfq_batch_quotes.assert_awaited_once_with(_BATCH_ID)
+
+
+@pytest.mark.asyncio
+async def test_rfq_batch_read_paths_on_the_wire(wire) -> None:
+    """Every RFQ-batch GET hits the exact OpenAPI v3.36.0 path and is signed."""
+    cases = [
+        (
+            "list_rfq_batches",
+            {
+                "limit": 20,
+                "cursor": "cur",
+                "status": "accepted",
+                "user_filter": "self",
+                "subaccount": 0,
+            },
+            "/trade-api/v2/communications/rfq_batches",
+        ),
+        (
+            "get_rfq_batch",
+            {"rfq_batch_id": _BATCH_ID},
+            f"/trade-api/v2/communications/rfq_batches/{_BATCH_ID}",
+        ),
+        (
+            "get_rfq_batch_best_quotes",
+            {"rfq_batch_id": _BATCH_ID},
+            f"/trade-api/v2/communications/rfq_batches/{_BATCH_ID}/best_quotes",
+        ),
+        (
+            "get_rfq_batch_quotes",
+            {"rfq_batch_id": _BATCH_ID},
+            f"/trade-api/v2/communications/rfq_batches/{_BATCH_ID}/quotes",
+        ),
+    ]
+    for name, args, path in cases:
+        before = len(wire)
+        await _call(name, args)
+        sent = wire[-1]
+        assert sent.url.path == path, (name, sent.url.path)
+        assert sent.method == "GET"
+        assert len(wire) == before + 1
+    listed = wire[0]
+    assert dict(listed.url.params) == {
+        "limit": "20",
+        "cursor": "cur",
+        "status": "accepted",
+        "user_filter": "self",
+        "subaccount": "0",
+    }
+    assert dict(wire[1].url.params) == {}
+    assert dict(wire[2].url.params) == {}
+    assert dict(wire[3].url.params) == {}
+
+
+@pytest.mark.asyncio
+async def test_rfq_batch_reads_require_credentials(make_client, monkeypatch) -> None:
+    """Each RFQ-batch GET declares kalshi access-key signing in the spec."""
+    client, requests = make_client(
+        lambda req: httpx.Response(200, json={"ok": True}),
+    )
+    monkeypatch.setattr(server, "kalshi_client", client)
+    for name in (
+        "list_rfq_batches",
+        "get_rfq_batch",
+        "get_rfq_batch_best_quotes",
+        "get_rfq_batch_quotes",
+    ):
+        args = {} if name == "list_rfq_batches" else {"rfq_batch_id": _BATCH_ID}
+        with pytest.raises(ValueError, match="requires Kalshi credentials"):
+            await _call(name, args)
+    assert requests == []
+
+
+def test_list_rfq_batches_rejects_params_outside_the_spec() -> None:
+    """limit is 1-20 and status/user_filter are the spec enums."""
+    ListRFQBatchesRequest(limit=1, status="closed", user_filter="self", subaccount=0)
+    ListRFQBatchesRequest(limit=20)
+    with pytest.raises(ValidationError):
+        ListRFQBatchesRequest(limit=0)
+    with pytest.raises(ValidationError):
+        ListRFQBatchesRequest(limit=21)
+    with pytest.raises(ValidationError):
+        ListRFQBatchesRequest(status="resting")
+    with pytest.raises(ValidationError):
+        ListRFQBatchesRequest(user_filter="all")
+    with pytest.raises(ValidationError):
+        ListRFQBatchesRequest(subaccount=-1)

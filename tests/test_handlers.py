@@ -74,6 +74,10 @@ EXPECTED_TOOLS = {
     "get_subaccount_balances",
     "list_subaccount_transfers",
     "get_subaccount_netting",
+    "list_rfq_batches",
+    "get_rfq_batch",
+    "get_rfq_batch_best_quotes",
+    "get_rfq_batch_quotes",
 }
 
 

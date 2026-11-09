@@ -907,3 +907,60 @@ class ListSubaccountTransfersRequest(_Paginated):
 
 class GetSubaccountNettingRequest(EmptyRequest):
     """GET /portfolio/subaccounts/netting — netting settings for subaccounts."""
+
+
+# ---- RFQ batches (OpenAPI v3.36.0, communications) ---------------------------
+class ListRFQBatchesRequest(_Paginated):
+    """GET /communications/rfq_batches — RFQ batches, most recently updated first."""
+
+    limit: int | None = _page_limit(20)
+    status: Literal["open", "accepted", "closed"] | None = Field(
+        default=None,
+        description=(
+            "Filter RFQ batches by status. open takes batch quotes; accepted is "
+            "waiting for winning makers to confirm or is executing; closed is finished."
+        ),
+    )
+    user_filter: Literal["self"] | None = Field(
+        default=None,
+        description=(
+            "Omit to return all results. Use self to filter by the authenticated user."
+        ),
+    )
+    subaccount: int | None = Field(default=None, ge=0, description=_SUBACCOUNT_ALL)
+
+
+class GetRFQBatchRequest(MCPSchemaBaseModel):
+    """GET /communications/rfq_batches/{rfq_batch_id}."""
+
+    rfq_batch_id: str = Field(
+        ...,
+        description=(
+            "RFQ batch UUID returned when the batch was created. Pass it unchanged; "
+            "malformed IDs return HTTP 400."
+        ),
+    )
+
+
+class GetRFQBatchBestQuotesRequest(MCPSchemaBaseModel):
+    """GET /communications/rfq_batches/{rfq_batch_id}/best_quotes."""
+
+    rfq_batch_id: str = Field(
+        ...,
+        description=(
+            "RFQ batch UUID returned when the batch was created. Pass it unchanged; "
+            "malformed IDs return HTTP 400."
+        ),
+    )
+
+
+class GetRFQBatchQuotesRequest(MCPSchemaBaseModel):
+    """GET /communications/rfq_batches/{rfq_batch_id}/quotes."""
+
+    rfq_batch_id: str = Field(
+        ...,
+        description=(
+            "RFQ batch UUID returned when the batch was created. Pass it unchanged; "
+            "malformed IDs return HTTP 400."
+        ),
+    )

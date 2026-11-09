@@ -241,6 +241,18 @@ paths:
   /portfolio/subaccounts/netting:
     get:
       parameters: []
+  /communications/rfq_batches:
+    get:
+      parameters: []
+  /communications/rfq_batches/{rfq_batch_id}:
+    get:
+      parameters: []
+  /communications/rfq_batches/{rfq_batch_id}/best_quotes:
+    get:
+      parameters: []
+  /communications/rfq_batches/{rfq_batch_id}/quotes:
+    get:
+      parameters: []
 """)
 
     code = check_drift(local_spec=mock_spec_file)

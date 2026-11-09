@@ -77,7 +77,7 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 
 ---
 
-## 3. Tool Annotations (55 Tools)
+## 3. Tool Annotations (59 Tools)
 
 | Tool Name | Type / Scope | `readOnlyHint` | `destructiveHint` | `idempotentHint` | `openWorldHint` |
 | :--- | :--- | :---: | :---: | :---: | :---: |
@@ -136,6 +136,10 @@ This skill guides AI agents on interacting with the Kalshi Exchange via `mcp-ser
 | `get_subaccount_balances` | Portfolio | `true` | `false` | `true` | `false` |
 | `list_subaccount_transfers` | Portfolio | `true` | `false` | `true` | `false` |
 | `get_subaccount_netting` | Portfolio | `true` | `false` | `true` | `false` |
+| `list_rfq_batches` | Communications | `true` | `false` | `true` | `false` |
+| `get_rfq_batch` | Communications | `true` | `false` | `true` | `false` |
+| `get_rfq_batch_best_quotes` | Communications | `true` | `false` | `true` | `false` |
+| `get_rfq_batch_quotes` | Communications | `true` | `false` | `true` | `false` |
 
 ---
 
