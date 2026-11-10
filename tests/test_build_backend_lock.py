@@ -61,7 +61,9 @@ def test_base_python_reads_the_dockerfile() -> None:
 
 
 # The digest pinned on both FROM lines. glibc comes from the trixie suffix, not this digest.
-_PINNED_DIGEST = "sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b"
+_PINNED_DIGEST = (
+    "sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b"
+)
 
 
 def test_image_glibc_is_pinned_to_the_dockerfile_base() -> None:
