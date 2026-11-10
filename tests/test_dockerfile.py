@@ -90,7 +90,7 @@ def test_both_stages_use_the_same_base_image() -> None:
     assert len(images) == 2
     digests = []
     for image in images:
-        match = re.fullmatch(r"python:3\.12-slim@sha256:([0-9a-f]{64})", image)
+        match = re.fullmatch(r"python:3\.12-slim-trixie@sha256:([0-9a-f]{64})", image)
         assert match, image
         digests.append(match.group(1))
     assert digests[0] == digests[1]
