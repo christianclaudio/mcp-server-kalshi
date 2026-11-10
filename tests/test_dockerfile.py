@@ -82,19 +82,22 @@ def _ca_run(stage: str) -> str:
 
 
 def test_both_stages_use_the_same_base_image() -> None:
-    """Both stages build FROM one base: Docker Official ``python:3.12-slim`` pinned by
-    the same multi-arch index digest (``python:3.12-slim@sha256:<64 hex>``).
+    """Both stages build FROM one base: Docker Official ``python:3.12-slim-trixie``
+    pinned by the same multi-arch index digest
+    (``python:3.12-slim-trixie@sha256:<64 hex>``). glibc follows the Debian release
+    in the tag, not the digest.
     """
     froms = [lines[0] for name, lines in _stages().items() if name]
     images = [line.split()[1] for line in froms]
     assert len(images) == 2
     digests = []
     for image in images:
-        match = re.fullmatch(r"python:3\.12-slim@sha256:([0-9a-f]{64})", image)
+        match = re.fullmatch(r"python:3\.12-slim-trixie@sha256:([0-9a-f]{64})", image)
         assert match, image
         digests.append(match.group(1))
     assert digests[0] == digests[1]
     assert len(set(images)) == 1
+    assert gen_build_backend.image_glibc(DOCKERFILE) == (2, 41)
 
 
 def test_floor_is_declared_once_and_used_by_both_stages() -> None:
