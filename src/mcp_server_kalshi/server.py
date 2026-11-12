@@ -146,10 +146,12 @@ settings = get_settings()
 
 KALSHI_BACKGROUND_INFO = _background_info(settings.env_label, settings.is_production)
 
+_private_key_path, _private_key_pem = settings.client_private_key()
 kalshi_client = KalshiAPIClient(
     base_url=settings.rest_base_url,
     api_key=settings.api_key_value(),
-    private_key_path=settings.KALSHI_PRIVATE_KEY_PATH,
+    private_key_path=_private_key_path,
+    private_key_pem=_private_key_pem,
 )
 
 

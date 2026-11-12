@@ -54,9 +54,19 @@ graph TD
 | :--- | :---: | :--- |
 | `KALSHI_ENV` | `demo` | `demo` (sandbox) or `prod` (real money). |
 | `KALSHI_API_KEY` / `KALSHI_API_KEY_ID` | _(none)_ | Kalshi API key ID. Required for portfolio and order tools. |
-| `KALSHI_PRIVATE_KEY_PATH` | _(none)_ | Path to your RSA or Ed25519 private key `.pem`. |
+| `KALSHI_PRIVATE_KEY_PATH` | _(none)_ | Path to your RSA or Ed25519 private key `.pem`. Set this or `KALSHI_PRIVATE_KEY`, not both. |
+| `KALSHI_PRIVATE_KEY` | _(none)_ | PEM text of that same key, instead of a file. See below. |
 | `KALSHI_READONLY` | `0` / `false` | When enabled (`1`), disables all mutating order endpoints at startup. |
 | `BASE_URL` | _(derived)_ | Optional REST override. Only `https://demo-api.kalshi.co/trade-api/v2`, `https://api.elections.kalshi.com/trade-api/v2`, or Kalshi's dedicated hosts: production `https://external-api.kalshi.com/trade-api/v2` and demo `https://external-api.demo.kalshi.co/trade-api/v2` ([changelog, May 7, 2026](https://docs.kalshi.com/changelog)). With no override, the server keeps using the shared hosts (`api.elections.kalshi.com` for `KALSHI_ENV=prod`, `demo-api.kalshi.co` for demo), which Kalshi still supports. The dedicated demo host reports as DEMO. |
+
+### Private key
+
+Set **one** of these for portfolio and order tools. Public market and rules tools do not need either.
+
+- `KALSHI_PRIVATE_KEY_PATH` is a filesystem path to the PEM file (RSA or Ed25519).
+- `KALSHI_PRIVATE_KEY` is the PEM text itself. A multiline value is accepted. A single line that uses the two-character `\n` escape, or the four-character `\r\n` escape, is accepted too; those are the forms most secret stores emit. A blank value counts as unset.
+
+Setting both is a configuration error. The process stops before it loads a key, and the error names the two variables only. Prefer your platform secret store (or a mounted file) over a shell command, shell history, or a committed env file. The key text is not written to logs, error messages, or tool results. `.env-example` has a commented placeholder and no key material.
 
 ---
 
