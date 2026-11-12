@@ -17,7 +17,7 @@ dependencies = [
     "certifi>=2026.10.23",
     "httpx>=0.28.1",
     "cryptography>=50.0.0",
-    "pypdf",
+    "pypdf>=4.0.0",
     "pydantic>=2.12.0",
     "pydantic-settings>=2.11.0",
 ]
