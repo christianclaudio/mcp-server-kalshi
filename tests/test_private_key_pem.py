@@ -333,7 +333,7 @@ def test_invalid_pem_error_omits_the_body(
     assert str(exc_info.value) == INVALID_PRIVATE_KEY_PEM_ERROR
     assert str(exc_info.value) == "KALSHI_PRIVATE_KEY is not a valid PEM private key"
     assert exc_info.value.__cause__ is None
-    assert exc_info.value.__suppress_context__ is True
+    assert exc_info.value.__context__ is None
     with pytest.raises(ValueError) as client_exc:
         KalshiAPIClient(base_url=DEMO, api_key="key-id", private_key_pem=bad)
     failure = tool_error(exc_info.value)
@@ -345,6 +345,29 @@ def test_invalid_pem_error_omits_the_body(
         repr(failure),
         _logged(caplog),
     )
+
+
+def test_lone_surrogate_is_not_chained(
+    rsa_material: tuple[rsa.RSAPrivateKey, str, str],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A lone surrogate must not leave the PEM on ``__context__``.
+
+    ``str.encode`` raises ``UnicodeEncodeError``, and that error keeps the
+    original string. Raising inside the ``except`` block would store it even
+    with ``from None``.
+    """
+    _key, pem, marker = rsa_material
+    bad = "\ud800" + pem
+    assert marker in bad
+    caplog.set_level(logging.DEBUG)
+    with pytest.raises(ValueError) as exc_info:
+        load_private_key_from_pem(bad)
+    err = exc_info.value
+    assert str(err) == INVALID_PRIVATE_KEY_PEM_ERROR
+    assert err.__cause__ is None
+    assert err.__context__ is None
+    _assert_hidden(marker, _exc_text(err), _logged(caplog))
 
 
 def test_unsupported_pem_type_omits_the_body(
@@ -363,6 +386,7 @@ def test_unsupported_pem_type_omits_the_body(
         load_private_key_from_pem(pem)
     assert str(exc_info.value) == INVALID_PRIVATE_KEY_PEM_ERROR
     assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
     _assert_hidden(marker, _exc_text(exc_info.value), _logged(caplog))
 
 

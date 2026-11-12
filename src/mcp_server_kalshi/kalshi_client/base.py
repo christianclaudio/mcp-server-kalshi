@@ -48,9 +48,12 @@ def load_private_key_from_pem(pem_text: str) -> KalshiPrivateKey:
     ``pem_text`` may use real newlines or the literal ``\\n`` / ``\\r\\n``
     escapes (see :func:`normalize_private_key_pem`). A parse failure, or a key
     that is neither RSA nor Ed25519, raises ``ValueError`` with
-    :data:`INVALID_PRIVATE_KEY_PEM_ERROR`. The text is not included, and the
-    underlying error is not chained.
+    :data:`INVALID_PRIVATE_KEY_PEM_ERROR`. The text is not included. The
+    ``ValueError`` is raised after the ``except`` block so the underlying
+    error is not stored on ``__context__`` (a lone surrogate's
+    ``UnicodeEncodeError`` keeps the original string).
     """
+    private_key: object = None
     try:
         private_key = serialization.load_pem_private_key(
             normalize_private_key_pem(pem_text).encode("utf-8"),
@@ -58,7 +61,7 @@ def load_private_key_from_pem(pem_text: str) -> KalshiPrivateKey:
             backend=default_backend(),
         )
     except Exception:
-        raise ValueError(INVALID_PRIVATE_KEY_PEM_ERROR) from None
+        private_key = None
     if isinstance(private_key, rsa.RSAPrivateKey | ed25519.Ed25519PrivateKey):
         return private_key
     raise ValueError(INVALID_PRIVATE_KEY_PEM_ERROR)
