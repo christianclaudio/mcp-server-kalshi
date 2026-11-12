@@ -30,8 +30,14 @@
         },
         {
           "name": "KALSHI_PRIVATE_KEY_PATH",
-          "description": "Path to your RSA or Ed25519 private key .pem; required for authenticated tools",
+          "description": "Path to your RSA or Ed25519 private key .pem. Set this or KALSHI_PRIVATE_KEY, not both.",
           "isRequired": false
+        },
+        {
+          "name": "KALSHI_PRIVATE_KEY",
+          "description": "PEM text of the RSA or Ed25519 key, instead of a file. Real newlines or literal \\n. Secret.",
+          "isRequired": false,
+          "isSecret": true
         },
         {
           "name": "BASE_URL",

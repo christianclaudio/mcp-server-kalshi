@@ -21,6 +21,51 @@ from ..ssrf import (
 # "BEGIN PRIVATE KEY".
 KalshiPrivateKey = rsa.RSAPrivateKey | ed25519.Ed25519PrivateKey
 
+# Names only. Callers must not attach PEM text, paths, or a chained exception.
+BOTH_PRIVATE_KEY_SOURCES_ERROR = (
+    "Set only one of KALSHI_PRIVATE_KEY_PATH or KALSHI_PRIVATE_KEY, not both."
+)
+INVALID_PRIVATE_KEY_PEM_ERROR = "KALSHI_PRIVATE_KEY is not a valid PEM private key"
+MISSING_CREDENTIALS_ERROR = (
+    "This action requires Kalshi credentials. Set KALSHI_API_KEY and either "
+    "KALSHI_PRIVATE_KEY_PATH or KALSHI_PRIVATE_KEY in the server environment."
+)
+
+
+def normalize_private_key_pem(value: str) -> str:
+    """Return PEM text with real newlines.
+
+    Accepts a multiline value, and the literal two-character escapes ``\\n`` and
+    ``\\r\\n`` that environment and secret stores use on a single line. Leading
+    and trailing whitespace is removed. A blank result is an empty string.
+    """
+    return value.replace("\\r\\n", "\n").replace("\\n", "\n").strip()
+
+
+def load_private_key_from_pem(pem_text: str) -> KalshiPrivateKey:
+    """Load an RSA or Ed25519 private key from PEM text.
+
+    ``pem_text`` may use real newlines or the literal ``\\n`` / ``\\r\\n``
+    escapes (see :func:`normalize_private_key_pem`). A parse failure, or a key
+    that is neither RSA nor Ed25519, raises ``ValueError`` with
+    :data:`INVALID_PRIVATE_KEY_PEM_ERROR`. The text is not included. The
+    ``ValueError`` is raised after the ``except`` block so the underlying
+    error is not stored on ``__context__`` (a lone surrogate's
+    ``UnicodeEncodeError`` keeps the original string).
+    """
+    private_key: object = None
+    try:
+        private_key = serialization.load_pem_private_key(
+            normalize_private_key_pem(pem_text).encode("utf-8"),
+            password=None,
+            backend=default_backend(),
+        )
+    except Exception:
+        private_key = None
+    if isinstance(private_key, rsa.RSAPrivateKey | ed25519.Ed25519PrivateKey):
+        return private_key
+    raise ValueError(INVALID_PRIVATE_KEY_PEM_ERROR)
+
 
 def load_private_key_from_file(file_path: str) -> KalshiPrivateKey:
     """Load an RSA or Ed25519 private key object from a PEM file.
@@ -105,10 +150,12 @@ class BaseAPIClient:
     hosts are accepted. Endpoint paths passed to the request helpers are relative to that
     (e.g. ``/portfolio/balance``).
 
-    Authentication is optional: when both ``api_key`` and ``private_key_path`` are
-    provided every request is signed with that key (RSA-PSS or Ed25519); otherwise
-    requests are sent unsigned, which is fine for public market-data endpoints.
-    Authenticated endpoints raise a clear error if creds are missing.
+    Authentication is optional: when ``api_key`` and exactly one of
+    ``private_key_path`` or ``private_key_pem`` are provided, every request is
+    signed with that key (RSA-PSS or Ed25519); otherwise requests are sent
+    unsigned, which is fine for public market-data endpoints. Authenticated
+    endpoints raise a clear error if creds are missing. Passing both key
+    sources raises :data:`BOTH_PRIVATE_KEY_SOURCES_ERROR` and loads nothing.
 
     Every request first passes the hostname check (allowlist plus a DNS answer with no
     private, loopback, link-local or metadata address). With ``trust_env`` on (the
@@ -123,6 +170,7 @@ class BaseAPIClient:
         base_url: str,
         api_key: str | None = None,
         private_key_path: str | None = None,
+        private_key_pem: str | None = None,
         timeout: int = 30,
         trust_env: bool = True,
     ) -> None:
@@ -131,9 +179,15 @@ class BaseAPIClient:
         self._trust_env: bool = trust_env
         self._proxied: bool = False
         self._api_key: str | None = api_key
-        self._private_key: KalshiPrivateKey | None = (
-            load_private_key_from_file(private_key_path) if private_key_path else None
-        )
+        if private_key_path and private_key_pem:
+            raise ValueError(BOTH_PRIVATE_KEY_SOURCES_ERROR)
+        self._private_key: KalshiPrivateKey | None
+        if private_key_pem:
+            self._private_key = load_private_key_from_pem(private_key_pem)
+        elif private_key_path:
+            self._private_key = load_private_key_from_file(private_key_path)
+        else:
+            self._private_key = None
         self._client: httpx.AsyncClient | None = None
 
     @property
@@ -172,10 +226,7 @@ class BaseAPIClient:
 
     def _require_auth(self) -> None:
         if not self.has_credentials:
-            raise ValueError(
-                "This action requires Kalshi credentials. Set KALSHI_API_KEY and "
-                "KALSHI_PRIVATE_KEY_PATH in the server environment."
-            )
+            raise ValueError(MISSING_CREDENTIALS_ERROR)
 
     async def _request(
         self,

@@ -16,6 +16,7 @@ def test_kalshi_settings_env_is_cleared():
     settings = Settings(_env_file=None)
     assert settings.KALSHI_API_KEY is None
     assert settings.KALSHI_PRIVATE_KEY_PATH is None
+    assert settings.KALSHI_PRIVATE_KEY is None
     assert settings.KALSHI_ENV == "demo"
 
 
