@@ -12,7 +12,7 @@ This repository is Christian Claudio's fork of [`9crusher/mcp-server-kalshi`](ht
 graph TD
     Client["AI Agent (Claude / Cortex / Antigravity / Cursor)"] -->|"MCP Stdio / Streamable HTTP"| Server["mcp-server-kalshi"]
     Server --> Config["KalshiSettings & Safety Gates"]
-    Config -->|"KALSHI_READONLY=1"| RO["Read-Only Gate (52 tools)"]
+    Config -->|"KALSHI_READONLY=1 or profile=readonly"| RO["Read-Only Gate (52 tools)"]
     Config -->|"confirm=True"| Mutating["Order Execution Gate (7 tools)"]
     Config -->|"Default: demo"| EnvSelect{"Environment Router"}
     EnvSelect -->|"demo"| DemoAPI["Kalshi Demo API (demo-api.kalshi.co)"]
@@ -42,7 +42,8 @@ graph TD
 
 - **Sandbox Default:** The server targets Kalshi's **demo (sandbox)** environment unless `KALSHI_ENV=prod` is explicitly set.
 - **Simulation Preview Gating:** Mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) require `confirm=true`. Without it, they return a structured simulation **preview** and send nothing.
-- **Read-Only Mode:** Run with `KALSHI_READONLY=1` to restrict registration exclusively to 52 read-only inspection tools.
+- **Read-Only Mode:** `KALSHI_READONLY=1` hides every tool whose `readOnlyHint` is not true and `ToolRegistry.get_handler` refuses a write. `KALSHI_MCP_PROFILE=readonly` (or `--profile readonly`) does the same with a `ReadOnlyToolFilter` and does not depend on `KALSHI_READONLY`. The default profile `full` still exposes all 59 tools.
+- **Tool Search and Code Mode (opt-in, full profile only):** `KALSHI_MCP_ENABLE_TOOL_SEARCH` / `--enable-tool-search` replaces `tools/list` with `search_tools` and `call_tool` (`KALSHI_MCP_TOOL_SEARCH_BACKEND` `regex` or `bm25`). `KALSHI_MCP_ENABLE_CODE_MODE` / `--enable-code-mode` replaces it with `search`, `get_schema`, and `execute` (install the `code-mode` extra). They are mutually exclusive and are not attached on `readonly`. With `KALSHI_READONLY=1`, `search_tools` / `search` / `get_schema` stay listed because they are read-only, and `call_tool` / `execute` stay listed so a client can still invoke read-only tools. `search_tools` never returns a write tool in that mode. A write tool reached through `call_tool`, `execute`, or a direct call is still refused by `ToolRegistry.get_handler`.
 - **Secret Scrubbing:** Private keys (PEM), API keys, request signatures, and Bearer tokens are scrubbed from error logs via `redact_secrets()`.
 - **Intuitive Order Pricing:** Exposes intuitive whole **cents** limit pricing and automatically translates buy-NO ⇄ sell-YES orderbook math.
 
@@ -56,7 +57,11 @@ graph TD
 | `KALSHI_API_KEY` / `KALSHI_API_KEY_ID` | _(none)_ | Kalshi API key ID. Required for portfolio and order tools. |
 | `KALSHI_PRIVATE_KEY_PATH` | _(none)_ | Path to your RSA or Ed25519 private key `.pem`. Set this or `KALSHI_PRIVATE_KEY`, not both. |
 | `KALSHI_PRIVATE_KEY` | _(none)_ | PEM text of that same key, instead of a file. See below. |
-| `KALSHI_READONLY` | `0` / `false` | When enabled (`1`), disables all mutating order endpoints at startup. |
+| `KALSHI_READONLY` | `0` / `false` | When enabled (`1`), hides non-read-only tools and refuses them in the handler, including a write reached through Tool Search or Code Mode. |
+| `KALSHI_MCP_PROFILE` | `full` | `full` (all 59 tools) or `readonly` (readOnlyHint tools only). `--profile` overrides. |
+| `KALSHI_MCP_ENABLE_TOOL_SEARCH` | `0` / `false` | On `full` only, replace `tools/list` with `search_tools` + `call_tool`. |
+| `KALSHI_MCP_TOOL_SEARCH_BACKEND` | `regex` | `regex` or `bm25`. |
+| `KALSHI_MCP_ENABLE_CODE_MODE` | `0` / `false` | On `full` only, replace `tools/list` with `search`, `get_schema`, and `execute`. Needs the `code-mode` extra. Mutually exclusive with Tool Search. |
 | `BASE_URL` | _(derived)_ | Optional REST override. Only `https://demo-api.kalshi.co/trade-api/v2`, `https://api.elections.kalshi.com/trade-api/v2`, or Kalshi's dedicated hosts: production `https://external-api.kalshi.com/trade-api/v2` and demo `https://external-api.demo.kalshi.co/trade-api/v2` ([changelog, May 7, 2026](https://docs.kalshi.com/changelog)). With no override, the server keeps using the shared hosts (`api.elections.kalshi.com` for `KALSHI_ENV=prod`, `demo-api.kalshi.co` for demo), which Kalshi still supports. The dedicated demo host reports as DEMO. |
 
 ### Private key

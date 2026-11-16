@@ -23,7 +23,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Code Mode is optional: FastMCP ships its pydantic-monty sandbox as the code-mode extra.
+code-mode = [
+    "fastmcp[code-mode]>=4.2.0",
+]
 dev = [
+    "fastmcp[code-mode]>=4.2.0",
     "black>=26.5.1",
     "ruff",
     "mypy",

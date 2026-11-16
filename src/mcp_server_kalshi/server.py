@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import importlib.util
 import json
 import logging
 import signal
@@ -9,11 +10,12 @@ import uuid
 from collections.abc import AsyncIterator, Callable, Coroutine, Sequence
 from contextlib import asynccontextmanager
 from functools import wraps
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import mcp.server.stdio as mcp_server_stdio
 import mcp.types as types
 from fastmcp import FastMCP
+from fastmcp.server.transforms.search import BM25SearchTransform, RegexSearchTransform
 from fastmcp.tools.base import Tool, ToolResult
 from fastmcp.tools.function_tool import FunctionTool
 from mcp.server.lowlevel import NotificationOptions
@@ -98,6 +100,13 @@ from mcp_server_kalshi.kalshi_client.schemas import (
     ListWithdrawalsRequest,
     MCPSchemaBaseModel,
 )
+from mcp_server_kalshi.profiles import (
+    PROFILES,
+    ReadOnlyAnnotations,
+    ReadOnlyToolFilter,
+    get_profile,
+    is_read_only_tool,
+)
 from mcp_server_kalshi.ssrf import validate_pdf_url
 
 
@@ -167,6 +176,21 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
             await kalshi_client.aclose()
 
 
+ToolSearchBackend = Literal["regex", "bm25"]
+
+# Synthetic discovery tools. search_tools / search / get_schema are also annotated
+# read-only. call_tool and execute are not: a write they reach is refused by
+# ToolRegistry.get_handler. KALSHI_READONLY still lists them so the client can
+# invoke read-only tools. None of these names is a catalog tool.
+_READONLY_LISTED_SYNTHETIC = frozenset(
+    {"search_tools", "call_tool", "search", "get_schema", "execute"}
+)
+TOOL_SEARCH_READ_ONLY_TOOLS = ("search_tools",)
+CODE_MODE_READ_ONLY_TOOLS = ("search", "get_schema")
+
+logger = logging.getLogger(__name__)
+
+
 def _is_read_only(ann: Any) -> bool:
     if ann is None:
         return False
@@ -204,9 +228,23 @@ class KalshiFastMCP(FastMCP):
 
     async def list_tools(self, *args: Any, **kwargs: Any) -> Sequence[Tool]:
         tools = await super().list_tools(*args, **kwargs)
-        if settings.KALSHI_READONLY:
-            return [t for t in tools if _is_read_only(t.annotations)]
-        return tools
+        if not settings.KALSHI_READONLY:
+            return tools
+        names = {tool.name for tool in tools}
+        # A discovery transform's client-facing list is only the synthetic tools.
+        # Keep those (call_tool and execute have no readOnlyHint) and drop anything
+        # else. The re-entrant catalog read is the real tool list: leave it intact
+        # so call_tool and execute can reach ToolRegistry.get_handler. search_tools
+        # drops writes itself.
+        discovery = _discovery_attached(self)
+        if discovery and names and not names <= _READONLY_LISTED_SYNTHETIC:
+            return list(tools)
+        return [
+            tool
+            for tool in tools
+            if _is_read_only(tool.annotations)
+            or tool.name in _READONLY_LISTED_SYNTHETIC
+        ]
 
     def add_request_handler(self, *args: Any, **kwargs: Any) -> Any:
         return self._mcp_server.add_request_handler(*args, **kwargs)
@@ -421,6 +459,179 @@ class ToolRegistry:
                 f"Server is operating in read-only mode (KALSHI_READONLY=1); tool '{name}' is disabled."
             )
         return handler
+
+
+def _copy_catalog(root: KalshiFastMCP) -> None:
+    """Register every catalog tool on a fresh gateway."""
+    for name, (tool, handler) in ToolRegistry._tools.items():
+        dumped = tool.model_dump()
+        parameters = dumped.get("inputSchema") or dumped.get("input_schema") or {}
+        root.add_tool(
+            KalshiFastMCPTool(
+                name=name,
+                description=tool.description or "",
+                parameters=parameters,
+                annotations=tool.annotations,
+                handler=handler,
+            )
+        )
+
+
+def _discovery_attached(root: FastMCP) -> bool:
+    """True when Tool Search or Code Mode is on this server."""
+    for item in root.transforms:
+        if isinstance(item, RegexSearchTransform | BM25SearchTransform):
+            return True
+        if type(item).__name__ == "CodeMode":
+            return True
+    return False
+
+
+def _without_writes(tools: Sequence[Tool]) -> list[Tool]:
+    """Drop write tools while ``KALSHI_READONLY`` is on. Otherwise return them all."""
+    if not settings.KALSHI_READONLY:
+        return list(tools)
+    return [tool for tool in tools if is_read_only_tool(tool)]
+
+
+class _RegexSearch(RegexSearchTransform):
+    """Regex Tool Search that omits write tools while the read-only gate is on."""
+
+    async def _search(self, tools: Sequence[Tool], query: str) -> Sequence[Tool]:
+        return _without_writes(await super()._search(tools, query))
+
+
+class _BM25Search(BM25SearchTransform):
+    """BM25 Tool Search that omits write tools while the read-only gate is on."""
+
+    async def _search(self, tools: Sequence[Tool], query: str) -> Sequence[Tool]:
+        return _without_writes(await super()._search(tools, query))
+
+
+def _attach_tool_search(root: FastMCP, backend: ToolSearchBackend) -> None:
+    """Attach regex (default) or BM25 Tool Search, then mark search_tools read-only."""
+    if backend == "bm25":
+        root.add_transform(_BM25Search())
+    else:
+        root.add_transform(_RegexSearch())
+    root.add_transform(ReadOnlyAnnotations(TOOL_SEARCH_READ_ONLY_TOOLS))
+
+
+def _code_mode_sandbox_available() -> bool:
+    """True when the Code Mode sandbox (``pydantic_monty``) is importable."""
+    return importlib.util.find_spec("pydantic_monty") is not None
+
+
+def _attach_code_mode(root: FastMCP) -> bool:
+    """Attach Code Mode when its sandbox is installed.
+
+    Returns True when the transform was attached. A missing ``pydantic_monty``
+    skips attach (install ``mcp-server-kalshi[code-mode]``).
+    """
+    if not _code_mode_sandbox_available():
+        logger.warning(
+            "Code Mode requested but pydantic-monty (the Code Mode sandbox) is not "
+            "installed; skipping attach. Install the code-mode extra "
+            "(mcp-server-kalshi[code-mode]) or omit --enable-code-mode."
+        )
+        return False
+    from fastmcp.experimental.transforms.code_mode import CodeMode, GetSchemas, Search
+
+    async def _visible_search(tools: Sequence[Tool], query: str) -> Sequence[Tool]:
+        ranked = await _BM25Search(max_results=sys.maxsize)._search(tools, query)
+        return _without_writes(ranked)
+
+    root.add_transform(
+        CodeMode(discovery_tools=[Search(search_fn=_visible_search), GetSchemas()])
+    )
+    root.add_transform(ReadOnlyAnnotations(CODE_MODE_READ_ONLY_TOOLS))
+    return True
+
+
+def _apply_discovery(
+    root: FastMCP,
+    *,
+    profile: str,
+    enable_tool_search: bool,
+    enable_code_mode: bool,
+    tool_search_backend: ToolSearchBackend,
+) -> None:
+    """Apply the profile filter and, on ``full`` only, Tool Search or Code Mode.
+
+    The two discovery modes are mutually exclusive. Requesting either on a
+    profile other than ``full`` logs a warning and leaves the flat catalog.
+    """
+    active = get_profile(profile)
+    if enable_tool_search and enable_code_mode:
+        raise ValueError(
+            "Tool Search and Code Mode are mutually exclusive; enable only one "
+            "discovery mode."
+        )
+    if active.readonly:
+        root.add_transform(ReadOnlyToolFilter())
+    if enable_tool_search:
+        if active.name != "full":
+            logger.warning(
+                "Tool Search requested with profile=%r; attach is allowed only on "
+                "profile='full'. Keeping the flat catalog.",
+                active.name,
+            )
+        else:
+            _attach_tool_search(root, tool_search_backend)
+    if enable_code_mode:
+        if active.name != "full":
+            logger.warning(
+                "Code Mode requested with profile=%r; attach is allowed only on "
+                "profile='full'. Keeping the flat catalog.",
+                active.name,
+            )
+        else:
+            _attach_code_mode(root)
+
+
+def create_server(
+    profile: str | None = None,
+    enable_tool_search: bool | None = None,
+    enable_code_mode: bool | None = None,
+    tool_search_backend: ToolSearchBackend | None = None,
+) -> KalshiFastMCP:
+    """Build a gateway with the catalog, profile, and optional discovery transforms.
+
+    Defaults match the process settings. ``full`` with both discovery flags off
+    is today's 59-tool catalog.
+    """
+    token = read_auth_token()
+    root = KalshiFastMCP(
+        "kalshi-server",
+        auth=SharedTokenVerifier(token) if token else None,
+        version=__version__,
+        lifespan=server_lifespan,
+        instructions=KALSHI_BACKGROUND_INFO,
+        cache_ttl=3600,
+        cache_scope="public",
+    )
+    root.server = root
+    _copy_catalog(root)
+    _apply_discovery(
+        root,
+        profile=profile if profile is not None else settings.KALSHI_MCP_PROFILE,
+        enable_tool_search=(
+            settings.KALSHI_MCP_ENABLE_TOOL_SEARCH
+            if enable_tool_search is None
+            else enable_tool_search
+        ),
+        enable_code_mode=(
+            settings.KALSHI_MCP_ENABLE_CODE_MODE
+            if enable_code_mode is None
+            else enable_code_mode
+        ),
+        tool_search_backend=(
+            settings.KALSHI_MCP_TOOL_SEARCH_BACKEND
+            if tool_search_backend is None
+            else tool_search_backend
+        ),
+    )
+    return root
 
 
 def _params(
@@ -1902,6 +2113,39 @@ def main() -> None:
         help="Return direct JSON responses instead of SSE text/event-stream over Streamable HTTP.",
     )
     parser.add_argument(
+        "--profile",
+        choices=sorted(PROFILES),
+        default=settings.KALSHI_MCP_PROFILE,
+        help=(
+            "Server profile (default 'full'): 'full' is every tool, 'readonly' "
+            "keeps tools annotated readOnlyHint=True."
+        ),
+    )
+    parser.add_argument(
+        "--enable-tool-search",
+        action="store_true",
+        default=settings.KALSHI_MCP_ENABLE_TOOL_SEARCH,
+        help=(
+            "Enable Tool Search on profile=full only "
+            "(replaces tools/list with search_tools + call_tool)."
+        ),
+    )
+    parser.add_argument(
+        "--tool-search-backend",
+        choices=["regex", "bm25"],
+        default=settings.KALSHI_MCP_TOOL_SEARCH_BACKEND,
+        help="Tool Search backend: 'regex' (default) or 'bm25'.",
+    )
+    parser.add_argument(
+        "--enable-code-mode",
+        action="store_true",
+        default=settings.KALSHI_MCP_ENABLE_CODE_MODE,
+        help=(
+            "Enable Code Mode on profile=full only (search, get_schema, execute). "
+            "Mutually exclusive with --enable-tool-search."
+        ),
+    )
+    parser.add_argument(
         "--allowed-host",
         action="append",
         default=[],
@@ -1914,6 +2158,22 @@ def main() -> None:
         help="Allowed origin header for CORS/CSRF protection (can be repeated).",
     )
     args, _ = parser.parse_known_args()
+
+    global mcp, server, streamable_http_app
+    if (
+        args.profile != settings.KALSHI_MCP_PROFILE
+        or args.enable_tool_search != settings.KALSHI_MCP_ENABLE_TOOL_SEARCH
+        or args.enable_code_mode != settings.KALSHI_MCP_ENABLE_CODE_MODE
+        or args.tool_search_backend != settings.KALSHI_MCP_TOOL_SEARCH_BACKEND
+    ):
+        mcp = create_server(
+            profile=args.profile,
+            enable_tool_search=args.enable_tool_search,
+            enable_code_mode=args.enable_code_mode,
+            tool_search_backend=args.tool_search_backend,
+        )
+        server = mcp
+        streamable_http_app = mcp.streamable_http_app
 
     if args.transport != "streamable-http":
         if args.stateless:
@@ -1952,6 +2212,17 @@ def main() -> None:
         asyncio.run(run_streamable_http(**http_kwargs))
     else:
         asyncio.run(run())
+
+
+# Settings are read at import. The default (full, discovery off) adds nothing,
+# so the served catalog stays the 59 tools registered above.
+_apply_discovery(
+    mcp,
+    profile=settings.KALSHI_MCP_PROFILE,
+    enable_tool_search=settings.KALSHI_MCP_ENABLE_TOOL_SEARCH,
+    enable_code_mode=settings.KALSHI_MCP_ENABLE_CODE_MODE,
+    tool_search_backend=settings.KALSHI_MCP_TOOL_SEARCH_BACKEND,
+)
 
 
 if __name__ == "__main__":  # pragma: no cover

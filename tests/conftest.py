@@ -33,6 +33,10 @@ KALSHI_SETTINGS_ENV = (
     "KALSHI_READONLY",
     "KALSHI_MCP_STATELESS_HTTP",
     "KALSHI_MCP_JSON_RESPONSE",
+    "KALSHI_MCP_PROFILE",
+    "KALSHI_MCP_ENABLE_TOOL_SEARCH",
+    "KALSHI_MCP_TOOL_SEARCH_BACKEND",
+    "KALSHI_MCP_ENABLE_CODE_MODE",
 )
 
 
@@ -71,6 +75,8 @@ if _OFFLINE_RUN:
     for _name in KALSHI_SETTINGS_ENV:
         os.environ.pop(_name, None)
     Settings.model_config["env_file"] = None
+
+import importlib.util  # noqa: E402
 
 import httpx  # noqa: E402
 import pytest  # noqa: E402
@@ -133,6 +139,33 @@ def _live_item_requires_auth(item: pytest.Item) -> bool:
     if marker is None:
         return False
     return bool(marker.kwargs.get("authenticated"))
+
+
+def code_mode_ci_guard_error(environ: dict[str, str] | None = None) -> str | None:
+    """Return an error when CI runs without the Code Mode sandbox, else None.
+
+    Code Mode tests skip without ``pydantic_monty`` so a local run without the
+    extra still passes. In CI a missing sandbox would turn those tests into
+    silent skips, so the session aborts instead.
+    """
+    env = os.environ if environ is None else environ
+    if not env.get("CI"):
+        return None
+    if importlib.util.find_spec("pydantic_monty") is not None:
+        return None
+    return (
+        "CI is set but pydantic_monty is not installed: install the code-mode extra "
+        "(uv sync --locked --extra dev --extra code-mode) so Code Mode tests run, "
+        "not skip."
+    )
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Abort a CI session that would silently skip the Code Mode tests."""
+    del session
+    error = code_mode_ci_guard_error()
+    if error is not None:
+        pytest.exit(error, returncode=3)
 
 
 def pytest_collection_modifyitems(
