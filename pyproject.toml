@@ -8,7 +8,7 @@ license = {text = "MIT"}
 
 dependencies = [
     "mcp>=2.3.0",
-    "fastmcp>=4.1.8",
+    "fastmcp>=4.2.0",
     # certifi floor from FastMCP's October 2026 certificate authority incident notice
     # (https://github.com/PrefectHQ/fastmcp/blob/main/SECURITY.md#certificate-authority-incident-october-2026),
     # raised to 2026.10.23, which drops emSign Root CA - C1 and emSign ECC Root CA - C3
@@ -23,7 +23,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Code Mode is optional: FastMCP ships its pydantic-monty sandbox as the code-mode extra.
+code-mode = [
+    "fastmcp[code-mode]>=4.2.0",
+]
 dev = [
+    "fastmcp[code-mode]>=4.2.0",
     "black>=26.5.1",
     "ruff",
     "mypy",
@@ -91,9 +96,15 @@ python_functions = "test_*"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = [
-    "e2e: end-to-end live network tests against Kalshi API (run with -m e2e)",
+    "live: needs a real Kalshi upstream (run with -m live). Public tools stay ungated; authenticated live items need KALSHI_API_KEY_ID and a private key.",
 ]
-addopts = "-m 'not e2e'"
+# Category only. A module regex is matched against the warning's stacklevel
+# caller, so it would miss our own FastMCP calls and would fail on a
+# third-party DeprecationWarning raised inside fastmcp.
+filterwarnings = [
+    "error::fastmcp.exceptions.FastMCPDeprecationWarning",
+]
+addopts = "-m 'not live'"
 
 [tool.black]
 # Match requires-python; without this Black infers every version up to 3.15 and

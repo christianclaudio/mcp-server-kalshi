@@ -1,6 +1,11 @@
+import asyncio
 import base64
+import random
+import re
 import time
 from collections.abc import Generator
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -30,6 +35,43 @@ MISSING_CREDENTIALS_ERROR = (
     "This action requires Kalshi credentials. Set KALSHI_API_KEY and either "
     "KALSHI_PRIVATE_KEY_PATH or KALSHI_PRIVATE_KEY in the server environment."
 )
+
+# How many times an idempotent call is retried after the first attempt.
+DEFAULT_MAX_RETRIES = 3
+
+MAX_RETRY_AFTER_SECONDS = 120
+"""Maximum ``Retry-After``, in seconds, that is honored in full.
+
+A value at or under this limit is waited out. A larger value, or a header
+that cannot be parsed, fails at once as ``KalshiAPIError`` and is not
+retried, so the client never waits less than the server asked. This limit
+is not the request timeout.
+"""
+
+# 429, 5xx, and transport errors are retried only for these methods.
+# Orders (POST, DELETE, PATCH) and every other non-idempotent call are not.
+_IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    """Return the wait a ``Retry-After`` header asks for, or None if absent or malformed.
+
+    RFC 9110 section 10.2.3 allows delta-seconds or an HTTP-date. A date is taken
+    relative to now and a past date counts as zero; a negative number is malformed.
+    """
+    value = response.headers.get("Retry-After")
+    if value is None:
+        return None
+    value = value.strip()
+    if re.fullmatch(r"[0-9]+", value):
+        return float(value)
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError, IndexError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return max(0.0, (when - datetime.now(UTC)).total_seconds())
 
 
 def normalize_private_key_pem(value: str) -> str:
@@ -163,6 +205,12 @@ class BaseAPIClient:
     URL after ``NO_PROXY`` is honored through httpx's own proxied transport; the proxy
     resolves the name, so the checked-address pin does not apply on that path. Otherwise
     requests go through ``SSRFSafeAsyncTransport`` and connect only to a checked address.
+
+    A 429, a 5xx, or a transport error is retried only for GET, HEAD, and OPTIONS,
+    up to ``max_retries`` times. The wait is the longer of a jittered backoff and a
+    ``Retry-After`` at or under ``MAX_RETRY_AFTER_SECONDS``. A longer or unparseable
+    ``Retry-After`` raises ``KalshiAPIError`` at once. POST, DELETE, PATCH, and every
+    other method — including order placement, amend, and cancel — are never retried.
     """
 
     def __init__(
@@ -173,10 +221,12 @@ class BaseAPIClient:
         private_key_pem: str | None = None,
         timeout: int = 30,
         trust_env: bool = True,
+        max_retries: int = DEFAULT_MAX_RETRIES,
     ) -> None:
         self._base_url: str = validate_api_base_url(base_url)
         self._timeout: int = timeout
         self._trust_env: bool = trust_env
+        self._max_retries: int = max_retries
         self._proxied: bool = False
         self._api_key: str | None = api_key
         if private_key_path and private_key_pem:
@@ -228,6 +278,44 @@ class BaseAPIClient:
         if not self.has_credentials:
             raise ValueError(MISSING_CREDENTIALS_ERROR)
 
+    def _backoff(self, attempt: int) -> float:
+        """Jittered exponential backoff, in seconds, for attempt ``attempt`` (from 0)."""
+        return float(2**attempt) + random.uniform(0.1, 0.5)
+
+    def _retry_delay(self, attempt: int, response: httpx.Response) -> float:
+        """Seconds to wait before retrying a 429 or 5xx response.
+
+        The longer of the jittered exponential backoff and a ``Retry-After`` at
+        or under ``MAX_RETRY_AFTER_SECONDS``. A hostile header is rejected by
+        the caller before this runs, so the wait is never shorter than the
+        server asked.
+        """
+        backoff = self._backoff(attempt)
+        retry_after = _retry_after_seconds(response)
+        if retry_after is None:
+            return backoff
+        return max(backoff, retry_after)
+
+    def _raise_for_response(
+        self, response: httpx.Response, method: str, path: str
+    ) -> None:
+        """Raise ``KalshiAPIError`` for a non-2xx response, keeping its body."""
+        try:
+            body: Any = response.json()
+        except Exception:
+            body = response.text
+        raise KalshiAPIError(response.status_code, method, path, body)
+
+    def _reject_hostile_retry_after(
+        self, response: httpx.Response, method: str, path: str
+    ) -> None:
+        """Fail at once when a present ``Retry-After`` is over the cap or unreadable."""
+        if response.headers.get("Retry-After") is None:
+            return
+        seconds = _retry_after_seconds(response)
+        if seconds is None or seconds > MAX_RETRY_AFTER_SECONDS:
+            self._raise_for_response(response, method, path)
+
     async def _request(
         self,
         method: str,
@@ -244,16 +332,28 @@ class BaseAPIClient:
             # No pinned connect consumes the check on the proxied path.
             discard_checked(httpx.URL(self._base_url).host)
         url = self._base_url + path
-        response = await client.request(method, url, params=params, json=json)
-        if response.is_error:
+        idempotent = method.upper() in _IDEMPOTENT_METHODS
+        attempt = 0
+        while True:
             try:
-                body: Any = response.json()
-            except Exception:
-                body = response.text
-            raise KalshiAPIError(response.status_code, method, path, body)
-        if not response.content:
-            return {}
-        return response.json()
+                response = await client.request(method, url, params=params, json=json)
+            except httpx.RequestError:
+                if idempotent and attempt < self._max_retries:
+                    await asyncio.sleep(self._backoff(attempt))
+                    attempt += 1
+                    continue
+                raise
+            if response.status_code == 429 or response.status_code >= 500:
+                self._reject_hostile_retry_after(response, method, path)
+                if idempotent and attempt < self._max_retries:
+                    await asyncio.sleep(self._retry_delay(attempt, response))
+                    attempt += 1
+                    continue
+            if response.is_error:
+                self._raise_for_response(response, method, path)
+            if not response.content:
+                return {}
+            return response.json()
 
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         return await self._request("GET", path, params=params)

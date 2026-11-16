@@ -17,6 +17,9 @@ import os
 import socket
 import sys
 
+# The floor test drives a child pytest with this plugin's pytester fixture.
+pytest_plugins = ["pytester"]
+
 # Every environment variable ``Settings`` in ``config.py`` reads. ``BASE_URL`` has no prefix,
 # and ``KALSHI_API_KEY_ID`` is an alias for ``KALSHI_API_KEY``. ``KALSHI_MCP_AUTH_TOKEN`` and
 # the unauthenticated-bind opt-in are handled by ``_clear_http_auth`` below.
@@ -30,6 +33,10 @@ KALSHI_SETTINGS_ENV = (
     "KALSHI_READONLY",
     "KALSHI_MCP_STATELESS_HTTP",
     "KALSHI_MCP_JSON_RESPONSE",
+    "KALSHI_MCP_PROFILE",
+    "KALSHI_MCP_ENABLE_TOOL_SEARCH",
+    "KALSHI_MCP_TOOL_SEARCH_BACKEND",
+    "KALSHI_MCP_ENABLE_CODE_MODE",
 )
 
 
@@ -48,13 +55,13 @@ def _marker_expressions(argv: list[str]) -> list[str]:
 
 
 def _live_run_requested(argv: list[str]) -> bool:
-    """True only when the run selects exactly the live ``e2e`` tests (``-m e2e``).
+    """True only when the run selects exactly the live tests (``-m live``).
 
     Live tests need the developer's real credentials, so they are exempt from clearing.
-    Any other marker expression, such as ``not (e2e)``, counts as offline and clears.
+    Any other marker expression, such as ``not (live)``, counts as offline and clears.
     """
     exprs = _marker_expressions(argv)
-    return bool(exprs) and exprs[-1].strip() == "e2e"
+    return bool(exprs) and exprs[-1].strip() == "live"
 
 
 # Clear at import, before ``server.py`` builds its module-level ``settings`` from the
@@ -68,6 +75,8 @@ if _OFFLINE_RUN:
     for _name in KALSHI_SETTINGS_ENV:
         os.environ.pop(_name, None)
     Settings.model_config["env_file"] = None
+
+import importlib.util  # noqa: E402
 
 import httpx  # noqa: E402
 import pytest  # noqa: E402
@@ -83,15 +92,107 @@ from mcp_server_kalshi.kalshi_client.client import KalshiAPIClient  # noqa: E402
 
 BASE_URL = "https://demo-api.kalshi.co/trade-api/v2"
 
+# Authenticated live tests need the key id and a private key. ``KALSHI_API_KEY``
+# is the alias of ``KALSHI_API_KEY_ID``. Either private-key source is enough.
+# Public live tests are not gated by this: they run under ``-m live`` without keys.
+LIVE_REQUIRED_ENV = (
+    "KALSHI_API_KEY_ID",
+    "KALSHI_PRIVATE_KEY_PATH",
+    "KALSHI_PRIVATE_KEY",
+)
+
+
+def live_skip_reason(environ: dict[str, str] | None = None) -> str | None:
+    """Return why an authenticated live test must skip, or None when it may run.
+
+    The key id may be ``KALSHI_API_KEY_ID`` or ``KALSHI_API_KEY``. Either
+    ``KALSHI_PRIVATE_KEY_PATH`` or ``KALSHI_PRIVATE_KEY`` satisfies the key.
+    The reason lists missing names and never a value. Public live tests do
+    not call this.
+    """
+    env = os.environ if environ is None else environ
+    missing: list[str] = []
+    key_id = (
+        env.get("KALSHI_API_KEY_ID", "").strip()
+        or env.get("KALSHI_API_KEY", "").strip()
+    )
+    if not key_id:
+        missing.append("KALSHI_API_KEY_ID")
+    has_key = bool(env.get("KALSHI_PRIVATE_KEY_PATH", "").strip()) or bool(
+        env.get("KALSHI_PRIVATE_KEY", "").strip()
+    )
+    if not has_key:
+        missing.append("KALSHI_PRIVATE_KEY_PATH")
+        missing.append("KALSHI_PRIVATE_KEY")
+    if not missing:
+        return None
+    return "missing or empty: " + ", ".join(missing)
+
+
+def _live_item_requires_auth(item: pytest.Item) -> bool:
+    """True for a live item marked ``authenticated=True``.
+
+    The bundled public sweep is ``@pytest.mark.live`` with no flag, so it
+    stays ungated. An authenticated-only item opts into the credential skip.
+    """
+    marker = item.get_closest_marker("live")
+    if marker is None:
+        return False
+    return bool(marker.kwargs.get("authenticated"))
+
+
+def code_mode_ci_guard_error(environ: dict[str, str] | None = None) -> str | None:
+    """Return an error when CI runs without the Code Mode sandbox, else None.
+
+    Code Mode tests skip without ``pydantic_monty`` so a local run without the
+    extra still passes. In CI a missing sandbox would turn those tests into
+    silent skips, so the session aborts instead.
+    """
+    env = os.environ if environ is None else environ
+    if not env.get("CI"):
+        return None
+    if importlib.util.find_spec("pydantic_monty") is not None:
+        return None
+    return (
+        "CI is set but pydantic_monty is not installed: install the code-mode extra "
+        "(uv sync --locked --extra dev --extra code-mode) so Code Mode tests run, "
+        "not skip."
+    )
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Abort a CI session that would silently skip the Code Mode tests."""
+    del session
+    error = code_mode_ci_guard_error()
+    if error is not None:
+        pytest.exit(error, returncode=3)
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Skip authenticated live items when the key id or a private key is absent.
+
+    Public live items are left alone. The reason lists missing names only.
+    """
+    del config
+    reason = live_skip_reason()
+    if reason is None:
+        return
+    skip = pytest.mark.skip(reason=reason)
+    for item in items:
+        if _live_item_requires_auth(item):
+            item.add_marker(skip)
+
 
 @pytest.fixture(autouse=True)
 def _clear_kalshi_env(monkeypatch, request):
     """Start every offline test with no Kalshi settings in the environment or ``.env``.
 
-    Tests that need a value set it with ``monkeypatch.setenv``. Live ``e2e`` tests opt out
+    Tests that need a value set it with ``monkeypatch.setenv``. Live tests opt out
     because they run against the real API with the developer's credentials.
     """
-    if request.node.get_closest_marker("e2e"):
+    if request.node.get_closest_marker("live"):
         return
     for name in KALSHI_SETTINGS_ENV:
         monkeypatch.delenv(name, raising=False)
@@ -138,10 +239,10 @@ def _no_real_network_connects(monkeypatch, request):
     ``httpx.MockTransport`` or a mock. A connect that reaches the real socket layer
     (``socket.socket.connect`` / ``connect_ex``, which asyncio and anyio also use, or
     ``socket.create_connection``) raises instead of dialing, unless it targets a literal
-    loopback address or a Unix socket (the HTTP tests serve on 127.0.0.1). Live ``e2e``
+    loopback address or a Unix socket (the HTTP tests serve on 127.0.0.1). Live
     tests opt out.
     """
-    if request.node.get_closest_marker("e2e"):
+    if request.node.get_closest_marker("live"):
         return
     real_connect = socket.socket.connect
     real_connect_ex = socket.socket.connect_ex
@@ -183,9 +284,9 @@ def _clear_proxy_env(monkeypatch, request):
 
     The API client honors ``HTTP(S)_PROXY`` / ``ALL_PROXY`` / ``NO_PROXY``, so a proxy
     exported in the developer's shell would change which transport the client tests get.
-    Tests that need one set it with ``monkeypatch.setenv``. Live ``e2e`` tests opt out.
+    Tests that need one set it with ``monkeypatch.setenv``. Live tests opt out.
     """
-    if request.node.get_closest_marker("e2e"):
+    if request.node.get_closest_marker("live"):
         return
     for name in PROXY_ENV:
         monkeypatch.delenv(name, raising=False)
@@ -196,10 +297,10 @@ def _public_dns_for_ssrf_checks(monkeypatch, request):
     """Keep SSRF DNS checks offline for unit tests.
 
     Allowlisted hosts resolve to a public address so request-time checks do not
-    touch the network. Live ``e2e`` tests opt out. Tests that reject private DNS
+    touch the network. Live tests opt out. Tests that reject private DNS
     answers patch ``getaddrinfo`` themselves.
     """
-    if request.node.get_closest_marker("e2e"):
+    if request.node.get_closest_marker("live"):
         return
 
     def _public_getaddrinfo(host, port, *args, **kwargs):

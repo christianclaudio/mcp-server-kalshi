@@ -101,10 +101,42 @@ class Settings(BaseSettings):
         default=False,
         description="Return direct application/json responses instead of SSE text/event-stream.",
     )
+    KALSHI_MCP_PROFILE: str = Field(
+        default="full",
+        description=(
+            "Server profile. 'full' (default) exposes every tool. 'readonly' keeps "
+            "only tools annotated readOnlyHint=True. Independent of KALSHI_READONLY."
+        ),
+    )
+    KALSHI_MCP_ENABLE_TOOL_SEARCH: bool = Field(
+        default=False,
+        description=(
+            "Opt-in Tool Search (search_tools + call_tool). Attached only on the "
+            "full profile, and mutually exclusive with Code Mode."
+        ),
+    )
+    KALSHI_MCP_TOOL_SEARCH_BACKEND: Literal["regex", "bm25"] = Field(
+        default="regex",
+        description="Tool Search backend: 'regex' (default) or 'bm25'.",
+    )
+    KALSHI_MCP_ENABLE_CODE_MODE: bool = Field(
+        default=False,
+        description=(
+            "Opt-in Code Mode (search + get_schema + execute). Attached only on "
+            "the full profile, and mutually exclusive with Tool Search. Requires "
+            "the code-mode extra."
+        ),
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
+
+    @field_validator("KALSHI_MCP_TOOL_SEARCH_BACKEND", mode="before")
+    @classmethod
+    def _normalize_tool_search_backend(cls, value: object) -> object:
+        """Accept ``BM25`` or `` bm25 ``; unknown values still fail the Literal."""
+        return value.strip().lower() if isinstance(value, str) else value
 
     @field_validator("KALSHI_PRIVATE_KEY", mode="before")
     @classmethod
