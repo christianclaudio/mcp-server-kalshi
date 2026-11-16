@@ -313,7 +313,10 @@ async def test_all_discovered_kalshi_tools_live() -> None:
                 else:
                     assert "requires Kalshi credentials" in text
                     status = "PASS (Auth Safety Gate Enforced)"
-            elif name == "get_historical_market":
+            elif name in {
+                "get_historical_market",
+                "get_historical_market_candlesticks",
+            }:
                 # 404 is acceptable only when the sample market is not in the
                 # historical tier.
                 assert not text.startswith(f"Error in {name}:") or "404" in text
