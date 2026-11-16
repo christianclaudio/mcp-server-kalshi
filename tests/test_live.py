@@ -226,6 +226,12 @@ async def test_all_discovered_kalshi_tools_live() -> None:
         "list_orders": {},
         "get_order": {"order_id": "00000000-0000-0000-0000-000000000000"},
         "list_order_groups": {},
+        # Production returns 400 when neither filter is set. Pass one.
+        "get_order_queue_positions": {"market_tickers": sample_ticker},
+        # A well-formed id. 404 is expected until Kalshi enables RFQ batches.
+        "get_rfq_batch_best_quotes": {
+            "rfq_batch_id": "00000000-0000-0000-0000-000000000000",
+        },
     }
 
     public_param_tools: dict[str, dict[str, Any]] = {
@@ -280,7 +286,7 @@ async def test_all_discovered_kalshi_tools_live() -> None:
                     assert "requires Kalshi credentials" in text
                     status = "PASS (Auth Safety Gate Enforced)"
             elif name == "get_event_live_data":
-                # Live scoreboard is ephemeral; sandbox returns 404 when no active game is in-progress
+                # 404 means Kalshi has no live data for that event.
                 assert not text.startswith(f"Error in {name}:") or "404" in text
                 status = "PASS (Live Scoreboard Endpoint Checked)"
             else:
