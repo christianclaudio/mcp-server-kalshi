@@ -159,6 +159,10 @@ async def test_all_discovered_kalshi_tools_live() -> None:
     except Exception:
         pass
 
+    # One hour of 60-minute candles. Both candlestick schemas require this window.
+    candle_end = int(time.time())
+    candle_start = candle_end - 3600
+
     try:
         c_res = await handle_call_tool("list_multivariate_collections", {"limit": 1})
         c_data = json.loads(c_res[0].text)
@@ -225,11 +229,21 @@ async def test_all_discovered_kalshi_tools_live() -> None:
         "get_settlements": {},
         "list_orders": {},
         "get_order": {"order_id": "00000000-0000-0000-0000-000000000000"},
+        "get_order_queue_position": {
+            "order_id": "00000000-0000-0000-0000-000000000000",
+        },
         "list_order_groups": {},
         # Production returns 400 when neither filter is set. Pass one.
         "get_order_queue_positions": {"market_tickers": sample_ticker},
-        # A well-formed id. 404 is expected until Kalshi enables RFQ batches.
+        # A well-formed id. 400/404 are accepted on the authenticated branch.
+        # 404 on best quotes is expected until Kalshi enables RFQ batches.
+        "get_rfq_batch": {
+            "rfq_batch_id": "00000000-0000-0000-0000-000000000000",
+        },
         "get_rfq_batch_best_quotes": {
+            "rfq_batch_id": "00000000-0000-0000-0000-000000000000",
+        },
+        "get_rfq_batch_quotes": {
             "rfq_batch_id": "00000000-0000-0000-0000-000000000000",
         },
     }
@@ -245,7 +259,21 @@ async def test_all_discovered_kalshi_tools_live() -> None:
         "fetch_rules_pdf": {"series_ticker": sample_series},
         "get_milestone": {"milestone_id": sample_milestone},
         "get_event_live_data": {"event_ticker": sample_event},
+        "get_live_data_batch": {"milestone_ids": [sample_milestone]},
         "get_multivariate_collection": {"collection_ticker": sample_collection},
+        "get_historical_market": {"ticker": sample_ticker},
+        "get_historical_market_candlesticks": {
+            "ticker": sample_ticker,
+            "start_ts": candle_start,
+            "end_ts": candle_end,
+            "period_interval": 60,
+        },
+        "batch_get_market_candlesticks": {
+            "market_tickers": sample_ticker,
+            "start_ts": candle_start,
+            "end_ts": candle_end,
+            "period_interval": 60,
+        },
     }
 
     results: list[dict[str, Any]] = []
@@ -285,8 +313,13 @@ async def test_all_discovered_kalshi_tools_live() -> None:
                 else:
                     assert "requires Kalshi credentials" in text
                     status = "PASS (Auth Safety Gate Enforced)"
-            elif name == "get_event_live_data":
-                # 404 means Kalshi has no live data for that event.
+            elif name == "get_historical_market":
+                # 404 is acceptable only when the sample market is not in the
+                # historical tier.
+                assert not text.startswith(f"Error in {name}:") or "404" in text
+                status = "PASS (Historical Market Endpoint Checked)"
+            elif name in {"get_event_live_data", "get_live_data_batch"}:
+                # 404 means Kalshi has no live data for that event or milestone.
                 assert not text.startswith(f"Error in {name}:") or "404" in text
                 status = "PASS (Live Scoreboard Endpoint Checked)"
             else:
