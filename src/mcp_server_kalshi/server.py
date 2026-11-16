@@ -1219,7 +1219,12 @@ async def handle_get_milestone(request: dict[str, Any]) -> Any:
 
 @ToolRegistry.register_tool(
     name="get_event_live_data",
-    description="Get real-time live scoreboard/game state data for an event ticker.",
+    description=(
+        "Get real-time live scoreboard/game state data for an event ticker "
+        "(GET /live_data/events/{event_ticker}). A 404 means Kalshi has no live "
+        'data for that event (docs: "Live data not found"; '
+        "https://docs.kalshi.com/openapi.yaml)."
+    ),
     input_schema=GetEventLiveDataRequest,
     read_only=True,
     destructive=False,
@@ -1535,7 +1540,10 @@ async def handle_get_account_endpoint_costs(request: dict[str, Any]) -> Any:
     name="get_order_queue_positions",
     description=(
         "Get queue positions for resting orders "
-        "(GET /portfolio/orders/queue_positions)."
+        "(GET /portfolio/orders/queue_positions). Pass market_tickers or "
+        "event_ticker. The spec lists both as optional "
+        "(https://docs.kalshi.com/openapi.yaml), but the production API "
+        "returned 400 when neither was set."
     ),
     input_schema=GetOrderQueuePositionsRequest,
     read_only=True,
@@ -1690,7 +1698,9 @@ async def handle_get_rfq_batch(request: dict[str, Any]) -> Any:
         "(GET /communications/rfq_batches/{rfq_batch_id}/best_quotes). Makers are "
         "not identified. Only the batch creator can read these, and a batch that "
         "is no longer open has none. Kalshi lists this endpoint in its OpenAPI "
-        "spec but hides it from the published docs until RFQ batches launch."
+        "spec (https://docs.kalshi.com/openapi.yaml) but hides it from the "
+        "published docs until RFQ batches launch. A 404 is expected until Kalshi "
+        "enables RFQ batches for the account."
     ),
     input_schema=GetRFQBatchBestQuotesRequest,
     read_only=True,
