@@ -44,7 +44,7 @@ def require_sample_market(markets: list[dict[str, Any]]) -> dict[str, Any]:
     market = pick_sample_market(markets)
     if market is None:
         pytest.skip(
-            "No open, non-multivariate Kalshi market found to use as the e2e sample"
+            "No open, non-multivariate Kalshi market found to use as the live sample"
         )
     return market
 
@@ -119,7 +119,7 @@ def test_require_sample_market_skips_when_none_usable() -> None:
     assert require_sample_market([good]) is good
 
 
-@pytest.mark.e2e
+@pytest.mark.live
 @pytest.mark.asyncio
 async def test_all_discovered_kalshi_tools_live() -> None:
     """Dynamically discover and exercise 100% of registered Kalshi tools against sandbox or safety gates."""

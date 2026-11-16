@@ -70,7 +70,10 @@ async def test_error_response_raises_kalshi_api_error(make_client):
 
 async def test_error_response_falls_back_to_text_body(make_client):
     # Non-JSON error bodies are surfaced as text, not swallowed.
-    client, _ = make_client(lambda req: httpx.Response(502, text="upstream boom"))
+    # max_retries=0 keeps this a single response; retries live in test_retry_after.py.
+    client, _ = make_client(
+        lambda req: httpx.Response(502, text="upstream boom"), max_retries=0
+    )
     with pytest.raises(KalshiAPIError) as exc_info:
         await client.get("/x")
     assert exc_info.value.body == "upstream boom"
