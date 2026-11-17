@@ -1,4 +1,4 @@
-"""Profiles, Tool Search, and Code Mode. The default catalog stays the 59 tools."""
+"""Profiles, Tool Search, and Code Mode. The default catalog stays the 101 tools."""
 
 from __future__ import annotations
 
@@ -96,14 +96,14 @@ async def test_full_profile_is_the_unchanged_catalog() -> None:
     app = create_server(profile="full")
     tools = await app.list_tools()
     assert _names(tools) == set(ToolRegistry._tools)
-    assert len(tools) == 59
+    assert len(tools) == 101
     assert SYNTHETIC.isdisjoint(_names(tools))
 
 
 async def test_every_catalog_tool_has_an_explicit_read_only_hint() -> None:
-    """readOnlyHint is true or false on every one of the 59 tools."""
+    """readOnlyHint is true or false on every one of the 101 tools."""
     tools = await create_server(profile="full").list_tools()
-    assert len(tools) == 59
+    assert len(tools) == 101
     for tool in tools:
         assert tool.annotations is not None, tool.name
         hint = tool.annotations.read_only_hint
@@ -133,7 +133,21 @@ async def test_readonly_profile_keeps_only_read_only_tools() -> None:
     readonly = await create_server(profile="readonly").list_tools()
     expected = {tool.name for tool in full if is_read_only_tool(tool)}
     assert _names(readonly) == expected
-    assert len(readonly) == 52
+    assert len(readonly) == 94
+    for name in (
+        "get_fcm_positions",
+        "list_rfqs",
+        "get_quote",
+        "get_weather_index",
+        "list_structured_targets",
+        "list_incentive_programs",
+        "get_event_metadata",
+        "get_order_group",
+        "list_intra_exchange_instance_transfers",
+        "get_credit_history",
+        "get_game_stats",
+    ):
+        assert name in _names(readonly)
     assert "create_order" not in _names(readonly)
     assert "list_markets" in _names(readonly)
 
