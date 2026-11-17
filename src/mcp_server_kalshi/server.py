@@ -51,54 +51,96 @@ from mcp_server_kalshi.kalshi_client.schemas import (
     DecreaseOrderRequest,
     EmptyRequest,
     FetchRulesPdfRequest,
+    GetAccountApiUsageLevelVolumeProgressRequest,
     GetAccountEndpointCostsRequest,
     GetAccountLimitsRequest,
     GetBalanceRequest,
+    GetCommunicationsIdRequest,
+    GetConcertCancellationAvailabilityRequest,
+    GetCreditHistoryRequest,
+    GetEventCandlesticksRequest,
+    GetEventContractExitTriggersRequest,
+    GetEventFeeChangesRequest,
+    GetEventForecastPercentileHistoryRequest,
     GetEventLiveDataRequest,
+    GetEventMetadataRequest,
     GetEventRequest,
+    GetExchangeUserDataTimestampRequest,
+    GetFCMEventContractDailyCapRequest,
+    GetFCMFillsRequest,
+    GetFCMOrdersRequest,
+    GetFCMPositionsRequest,
+    GetFCMSubtraderBlockedCategoriesRequest,
     GetFillsRequest,
+    GetGameStatsRequest,
     GetHistoricalCutoffRequest,
     GetHistoricalFillsRequest,
     GetHistoricalMarketCandlesticksRequest,
     GetHistoricalMarketRequest,
     GetHistoricalPositionsRequest,
     GetHistoricalTradesRequest,
+    GetIncentiveSchedulesRequest,
+    GetIntraExchangeInstanceTransferRequest,
     GetLiveDataBatchRequest,
+    GetLiveDataByMilestoneRequest,
+    GetLiveDataRequest,
     GetMarketCandlesticksRequest,
     GetMarketOrderbookRequest,
+    GetMarketOrderbooksRequest,
     GetMarketRequest,
     GetMarketRulesRequest,
     GetMarketTradesRequest,
     GetMilestoneRequest,
     GetMilestonesRequest,
     GetMultivariateCollectionRequest,
+    GetOrderGroupRequest,
     GetOrderQueuePositionRequest,
     GetOrderQueuePositionsRequest,
     GetOrderRequest,
     GetPositionsRequest,
+    GetQuoteRequest,
     GetRFQBatchBestQuotesRequest,
     GetRFQBatchQuotesRequest,
     GetRFQBatchRequest,
+    GetRFQQuoteRequest,
+    GetRFQRequest,
+    GetSeriesFeeChangesRequest,
     GetSeriesRequest,
     GetSettlementsRequest,
     GetSportsFiltersRequest,
+    GetStructuredTargetRequest,
     GetSubaccountBalancesRequest,
     GetSubaccountNettingRequest,
     GetTagsByCategoriesRequest,
+    GetTargetBalanceAllocationRequest,
     GetTotalRestingOrderValueRequest,
+    GetWeatherIndexCalibrationsRequest,
+    GetWeatherIndexRequest,
+    GetWeatherPointAvailabilityRequest,
+    ListApiKeysRequest,
+    ListBlockTradeProposalsRequest,
+    ListConcertsRequest,
     ListDepositsRequest,
     ListEventsRequest,
+    ListFCMSubtradersRequest,
     ListHistoricalMarketsRequest,
     ListHistoricalOrdersRequest,
+    ListIncentiveProgramsRequest,
+    ListIntraExchangeInstanceTransfersRequest,
     ListMarketsRequest,
     ListMultivariateCollectionsRequest,
+    ListMultivariateEventsRequest,
     ListOrderGroupsRequest,
     ListOrdersRequest,
+    ListQuotesRequest,
     ListRFQBatchesRequest,
+    ListRFQsRequest,
     ListSeriesRequest,
+    ListStructuredTargetsRequest,
     ListSubaccountTransfersRequest,
     ListWithdrawalsRequest,
     MCPSchemaBaseModel,
+    SearchConcertsRequest,
 )
 from mcp_server_kalshi.profiles import (
     PROFILES,
@@ -598,7 +640,7 @@ def create_server(
     """Build a gateway with the catalog, profile, and optional discovery transforms.
 
     Defaults match the process settings. ``full`` with both discovery flags off
-    is today's 59-tool catalog.
+    is today's 101-tool catalog.
     """
     token = read_auth_token()
     root = KalshiFastMCP(
@@ -1946,6 +1988,824 @@ async def handle_get_rfq_batch_quotes(request: dict[str, Any]) -> Any:
     return await kalshi_client.get_rfq_batch_quotes(req.rfq_batch_id)
 
 
+# ============ Spec v3.36.0 reads (GET paths that had no client method) ========
+@ToolRegistry.register_tool(
+    name="get_event_contract_exit_triggers",
+    description=(
+        "Get the take-profit / stop-loss bracket on a position "
+        "(GET /portfolio/positions/{ticker}/exit_trigger). exit_triggers lists live "
+        "brackets, and exit_trigger is the most recently updated bracket, including "
+        "a terminal one. Kalshi hides this endpoint from the published docs until "
+        "event-contract take-profit / stop-loss launches."
+    ),
+    input_schema=GetEventContractExitTriggersRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_event_contract_exit_triggers(request: dict[str, Any]) -> Any:
+    req = GetEventContractExitTriggersRequest(**request)
+    return await kalshi_client.get_event_contract_exit_triggers(
+        req.ticker,
+        _params(request, GetEventContractExitTriggersRequest, drop=("ticker",)),
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_series_fee_changes",
+    description="Get series fee changes (GET /series/fee_changes).",
+    input_schema=GetSeriesFeeChangesRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_series_fee_changes(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_series_fee_changes(
+        _params(request, GetSeriesFeeChangesRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_exchange_user_data_timestamp",
+    description=(
+        "Get an approximate timestamp of when balance, order, fill, and position "
+        "reads were last validated (GET /exchange/user_data_timestamp). Exchange "
+        "events can lag these REST reads."
+    ),
+    input_schema=GetExchangeUserDataTimestampRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_exchange_user_data_timestamp(request: dict[str, Any]) -> Any:
+    GetExchangeUserDataTimestampRequest(**request)
+    return await kalshi_client.get_exchange_user_data_timestamp()
+
+
+@ToolRegistry.register_tool(
+    name="get_market_orderbooks",
+    description=(
+        "Get order books for up to 100 markets (GET /markets/orderbooks). Returns "
+        "yes bids and no bids only, one book per requested ticker, in request order. "
+        "A ticker with no book is returned with empty arrays."
+    ),
+    input_schema=GetMarketOrderbooksRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_market_orderbooks(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_market_orderbooks(
+        _params(request, GetMarketOrderbooksRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_event_candlesticks",
+    description=(
+        "Get candlesticks aggregated across the markets of one event "
+        "(GET /series/{series_ticker}/events/{ticker}/candlesticks). "
+        "period_interval is 1, 60, or 1440."
+    ),
+    input_schema=GetEventCandlesticksRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_event_candlesticks(request: dict[str, Any]) -> Any:
+    req = GetEventCandlesticksRequest(**request)
+    return await kalshi_client.get_event_candlesticks(
+        req.series_ticker,
+        req.ticker,
+        _params(
+            request,
+            GetEventCandlesticksRequest,
+            drop=("series_ticker", "ticker"),
+        ),
+    )
+
+
+@ToolRegistry.register_tool(
+    name="list_multivariate_events",
+    description=(
+        "List multivariate (combo) events (GET /events/multivariate). "
+        "collection_ticker cannot be used together with series_ticker."
+    ),
+    input_schema=ListMultivariateEventsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_multivariate_events(request: dict[str, Any]) -> Any:
+    return await kalshi_client.list_multivariate_events(
+        _params(request, ListMultivariateEventsRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_event_fee_changes",
+    description=(
+        "Get event fee overrides on top of the parent series fee "
+        "(GET /events/fee_changes). Null fee_type_override and "
+        "fee_multiplier_override mean the override is cleared."
+    ),
+    input_schema=GetEventFeeChangesRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_event_fee_changes(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_event_fee_changes(
+        _params(request, GetEventFeeChangesRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_event_metadata",
+    description=(
+        "Get metadata for one event by ticker (GET /events/{event_ticker}/metadata). "
+        "Returns only the event's metadata."
+    ),
+    input_schema=GetEventMetadataRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_event_metadata(request: dict[str, Any]) -> Any:
+    req = GetEventMetadataRequest(**request)
+    return await kalshi_client.get_event_metadata(req.event_ticker)
+
+
+@ToolRegistry.register_tool(
+    name="get_event_forecast_percentile_history",
+    description=(
+        "Get historical raw and formatted forecast numbers for an event at "
+        "specific percentiles "
+        "(GET /series/{series_ticker}/events/{ticker}/forecast_percentile_history). "
+        "Authenticated. period_interval 0 is a 5-second bucket; 1, 60, and 1440 "
+        "are minute-based."
+    ),
+    input_schema=GetEventForecastPercentileHistoryRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_event_forecast_percentile_history(request: dict[str, Any]) -> Any:
+    req = GetEventForecastPercentileHistoryRequest(**request)
+    return await kalshi_client.get_event_forecast_percentile_history(
+        req.series_ticker,
+        req.ticker,
+        _params(
+            request,
+            GetEventForecastPercentileHistoryRequest,
+            drop=("series_ticker", "ticker"),
+        ),
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_order_group",
+    description=(
+        "Get one order group, including its order IDs and auto-cancel status "
+        "(GET /portfolio/order_groups/{order_group_id})."
+    ),
+    input_schema=GetOrderGroupRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_order_group(request: dict[str, Any]) -> Any:
+    req = GetOrderGroupRequest(**request)
+    return await kalshi_client.get_order_group(
+        req.order_group_id,
+        _params(request, GetOrderGroupRequest, drop=("order_group_id",)),
+    )
+
+
+@ToolRegistry.register_tool(
+    name="list_intra_exchange_instance_transfers",
+    description=(
+        "List intra-exchange account transfer history "
+        "(GET /portfolio/intra_exchange_instance_transfers)."
+    ),
+    input_schema=ListIntraExchangeInstanceTransfersRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_intra_exchange_instance_transfers(
+    request: dict[str, Any],
+) -> Any:
+    return await kalshi_client.list_intra_exchange_instance_transfers(
+        _params(request, ListIntraExchangeInstanceTransfersRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_intra_exchange_instance_transfer",
+    description=(
+        "Get one intra-exchange account transfer by id "
+        "(GET /portfolio/intra_exchange_instance_transfers/{transfer_id})."
+    ),
+    input_schema=GetIntraExchangeInstanceTransferRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_intra_exchange_instance_transfer(request: dict[str, Any]) -> Any:
+    req = GetIntraExchangeInstanceTransferRequest(**request)
+    return await kalshi_client.get_intra_exchange_instance_transfer(req.transfer_id)
+
+
+@ToolRegistry.register_tool(
+    name="get_credit_history",
+    description=(
+        "Get the authenticated member's credit history, newest first "
+        "(GET /portfolio/credit_history). min_ts is inclusive and max_ts is exclusive, "
+        "both applied to credit creation time."
+    ),
+    input_schema=GetCreditHistoryRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_credit_history(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_credit_history(
+        _params(request, GetCreditHistoryRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_communications_id",
+    description=(
+        "Get the communications ID of the logged-in user (GET /communications/id)."
+    ),
+    input_schema=GetCommunicationsIdRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_communications_id(request: dict[str, Any]) -> Any:
+    GetCommunicationsIdRequest(**request)
+    return await kalshi_client.get_communications_id()
+
+
+@ToolRegistry.register_tool(
+    name="list_block_trade_proposals",
+    description=(
+        "List block trade proposals visible to the authenticated user "
+        "(GET /communications/block-trade-proposals). status is a free string in "
+        "the spec; it does not publish the allowed values."
+    ),
+    input_schema=ListBlockTradeProposalsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_block_trade_proposals(request: dict[str, Any]) -> Any:
+    return await kalshi_client.list_block_trade_proposals(
+        _params(request, ListBlockTradeProposalsRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="list_rfqs",
+    description=(
+        "List RFQs (GET /communications/rfqs). Pass cursors back unchanged. "
+        "user_filter=self filters to the authenticated user. creator_user_id is "
+        "deprecated. A malformed cursor or invalid creator_user_id UUID returns "
+        "HTTP 400. status is a free string in the spec; it does not publish the "
+        "allowed values."
+    ),
+    input_schema=ListRFQsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_rfqs(request: dict[str, Any]) -> Any:
+    return await kalshi_client.list_rfqs(_params(request, ListRFQsRequest))
+
+
+@ToolRegistry.register_tool(
+    name="get_rfq",
+    description="Get one RFQ by id (GET /communications/rfqs/{rfq_id}).",
+    input_schema=GetRFQRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_rfq(request: dict[str, Any]) -> Any:
+    req = GetRFQRequest(**request)
+    return await kalshi_client.get_rfq(req.rfq_id)
+
+
+@ToolRegistry.register_tool(
+    name="get_rfq_quote",
+    description=(
+        "Get one quote scoped to its RFQ "
+        "(GET /communications/rfqs/{rfq_id}/quotes/{quote_id})."
+    ),
+    input_schema=GetRFQQuoteRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_rfq_quote(request: dict[str, Any]) -> Any:
+    req = GetRFQQuoteRequest(**request)
+    return await kalshi_client.get_rfq_quote(req.rfq_id, req.quote_id)
+
+
+@ToolRegistry.register_tool(
+    name="list_quotes",
+    description=(
+        "List quotes visible to you (GET /communications/quotes). With rfq_id, quotes "
+        "are sorted on the RFQ's main side. rfq_creator_subtrader_id is FCM members "
+        "only. quote_creator_user_id and rfq_creator_user_id are deprecated. status "
+        "is a free string in the spec; it does not publish the allowed values. "
+        "Pass cursors back unchanged."
+    ),
+    input_schema=ListQuotesRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_quotes(request: dict[str, Any]) -> Any:
+    return await kalshi_client.list_quotes(_params(request, ListQuotesRequest))
+
+
+@ToolRegistry.register_tool(
+    name="get_quote",
+    description=(
+        "DEPRECATED: use get_rfq_quote (GET /communications/rfqs/{rfq_id}/quotes/"
+        "{quote_id}) instead. Get one quote by id "
+        "(GET /communications/quotes/{quote_id}). The spec marks this route deprecated."
+    ),
+    input_schema=GetQuoteRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_quote(request: dict[str, Any]) -> Any:
+    req = GetQuoteRequest(**request)
+    return await kalshi_client.get_quote(req.quote_id)
+
+
+@ToolRegistry.register_tool(
+    name="list_api_keys",
+    description=(
+        "List API keys for the authenticated user (GET /api_keys). "
+        "fcm_subtrader_id returns only keys bound to that FCM subtrader; only FCM "
+        "members hold bound keys. Omit it to return every key."
+    ),
+    input_schema=ListApiKeysRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_api_keys(request: dict[str, Any]) -> Any:
+    return await kalshi_client.list_api_keys(_params(request, ListApiKeysRequest))
+
+
+@ToolRegistry.register_tool(
+    name="get_account_api_usage_level_volume_progress",
+    description=(
+        "Get the authenticated user's trading-volume progress toward volume-based "
+        "API usage tiers for the predictions (event_contract) lane "
+        "(GET /account/api_usage_level/volume_progress). Volume figures are "
+        "fixed-point contract counts."
+    ),
+    input_schema=GetAccountApiUsageLevelVolumeProgressRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_account_api_usage_level_volume_progress(
+    request: dict[str, Any],
+) -> Any:
+    GetAccountApiUsageLevelVolumeProgressRequest(**request)
+    return await kalshi_client.get_account_api_usage_level_volume_progress()
+
+
+@ToolRegistry.register_tool(
+    name="get_live_data_by_milestone",
+    description=(
+        "Get live data for one milestone (GET /live_data/milestone/{milestone_id}). "
+        "live_data.details.status is the preferred game-status source. A missing "
+        "live_data_delayed flag does not by itself mean the data is current."
+    ),
+    input_schema=GetLiveDataByMilestoneRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_live_data_by_milestone(request: dict[str, Any]) -> Any:
+    req = GetLiveDataByMilestoneRequest(**request)
+    return await kalshi_client.get_live_data_by_milestone(
+        req.milestone_id,
+        _params(request, GetLiveDataByMilestoneRequest, drop=("milestone_id",)),
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_live_data",
+    description=(
+        "Get live data for one milestone on the legacy typed path "
+        "(GET /live_data/{type}/milestone/{milestone_id}). Prefer "
+        "get_live_data_by_milestone, which does not take type."
+    ),
+    input_schema=GetLiveDataRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_live_data(request: dict[str, Any]) -> Any:
+    req = GetLiveDataRequest(**request)
+    return await kalshi_client.get_live_data(
+        req.type,
+        req.milestone_id,
+        _params(request, GetLiveDataRequest, drop=("type", "milestone_id")),
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_game_stats",
+    description=(
+        "Get play-by-play game statistics for a milestone "
+        "(GET /live_data/milestone/{milestone_id}/game_stats). Supported sports: "
+        "Pro Football, College Football, Pro Basketball, College Men's Basketball, "
+        "College Women's Basketball, WNBA, Soccer, Pro Hockey, and Pro Baseball. "
+        "Returns null for unsupported milestone types or milestones without a "
+        "Sportradar ID."
+    ),
+    input_schema=GetGameStatsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_game_stats(request: dict[str, Any]) -> Any:
+    req = GetGameStatsRequest(**request)
+    return await kalshi_client.get_game_stats(req.milestone_id)
+
+
+@ToolRegistry.register_tool(
+    name="get_weather_index",
+    description=(
+        "Get the Kalshi-computed city temperature index "
+        "(GET /live_data/weather/{city}), in Fahrenheit rounded to 0.01. Gaps are "
+        "minutes where the index quorum failed. last_sec cannot be combined with "
+        "from or to, and from must be paired with to. The spec does not forbid "
+        "passing to alone."
+    ),
+    input_schema=GetWeatherIndexRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_weather_index(request: dict[str, Any]) -> Any:
+    req = GetWeatherIndexRequest(**request)
+    params = req.model_dump(exclude_none=True, by_alias=True)
+    params.pop("city")
+    return await kalshi_client.get_weather_index(req.city, params)
+
+
+@ToolRegistry.register_tool(
+    name="get_weather_index_calibrations",
+    description=(
+        "Get a city's published weather-index configuration timeline "
+        "(GET /live_data/weather/{city}/calibrations): the launch configuration plus "
+        "every weekly offset calibration and methodology update, ascending by "
+        "effective time. The timeline is append-only."
+    ),
+    input_schema=GetWeatherIndexCalibrationsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_weather_index_calibrations(request: dict[str, Any]) -> Any:
+    req = GetWeatherIndexCalibrationsRequest(**request)
+    return await kalshi_client.get_weather_index_calibrations(req.city)
+
+
+@ToolRegistry.register_tool(
+    name="list_structured_targets",
+    description=(
+        "List structured targets (GET /structured_targets). Repeat ids to filter "
+        "to specific targets (form style, exploded)."
+    ),
+    input_schema=ListStructuredTargetsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_structured_targets(request: dict[str, Any]) -> Any:
+    return await kalshi_client.list_structured_targets(
+        _params(request, ListStructuredTargetsRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_structured_target",
+    description=(
+        "Get one structured target by ID "
+        "(GET /structured_targets/{structured_target_id})."
+    ),
+    input_schema=GetStructuredTargetRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_structured_target(request: dict[str, Any]) -> Any:
+    req = GetStructuredTargetRequest(**request)
+    return await kalshi_client.get_structured_target(req.structured_target_id)
+
+
+@ToolRegistry.register_tool(
+    name="get_weather_point_availability",
+    description=(
+        "Get which on-request weather markets can be created "
+        "(GET /weather_point_markets/availability): whether creation is on, the "
+        "NOAA MRMS domains a location may lie in, and the domains each offered "
+        "variable may use. A variable missing from variables cannot be created. "
+        "A location inside an offered domain can still be refused when it is over "
+        "open water. Existing markets are unaffected."
+    ),
+    input_schema=GetWeatherPointAvailabilityRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_weather_point_availability(request: dict[str, Any]) -> Any:
+    GetWeatherPointAvailabilityRequest(**request)
+    return await kalshi_client.get_weather_point_availability()
+
+
+@ToolRegistry.register_tool(
+    name="get_concert_cancellation_availability",
+    description=(
+        "Get which on-request concert-cancellation markets can be created "
+        "(GET /concert_cancellation_markets/availability): whether creation is on, "
+        "the covers offered, how far ahead a show may be scheduled, and the metros "
+        "whose concerts list_concerts lists. A cover missing from covers cannot be "
+        "created. Pass date_from and date_to to count only the shows a listing with "
+        "the same dates would return."
+    ),
+    input_schema=GetConcertCancellationAvailabilityRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_concert_cancellation_availability(
+    request: dict[str, Any],
+) -> Any:
+    return await kalshi_client.get_concert_cancellation_availability(
+        _params(request, GetConcertCancellationAvailabilityRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="list_concerts",
+    description=(
+        "List a metro's upcoming concerts that a cancellation market can still be "
+        "created for (GET /concert_cancellation_markets/concerts). Authenticated. "
+        "50 to a page and at most 20 pages, soonest first. Each concert carries the "
+        "jambase_event_id and scheduled_date that market creation takes. A ticker "
+        "listed here may name a market that does not exist yet."
+    ),
+    input_schema=ListConcertsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_concerts(request: dict[str, Any]) -> Any:
+    return await kalshi_client.list_concerts(_params(request, ListConcertsRequest))
+
+
+@ToolRegistry.register_tool(
+    name="search_concerts",
+    description=(
+        "Search upcoming concerts by name across metros "
+        "(GET /concert_cancellation_markets/concerts/search). Authenticated. Returns "
+        "up to 50 concerts in the same shape as list_concerts. The name is matched "
+        "against the acts on the bill, and may also match venues and cities. When "
+        "the shared search limit is reached the API returns 429 "
+        "concert_search_limit_exceeded."
+    ),
+    input_schema=SearchConcertsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_search_concerts(request: dict[str, Any]) -> Any:
+    return await kalshi_client.search_concerts(_params(request, SearchConcertsRequest))
+
+
+@ToolRegistry.register_tool(
+    name="list_incentive_programs",
+    description=(
+        "List incentive programs (GET /incentive_programs). Incentives are rewards "
+        "for trading activity on specific markets. status and type default to all "
+        "when omitted."
+    ),
+    input_schema=ListIncentiveProgramsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_incentive_programs(request: dict[str, Any]) -> Any:
+    return await kalshi_client.list_incentive_programs(
+        _params(request, ListIncentiveProgramsRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_incentive_schedules",
+    description=(
+        "List recurring incentive schedules (GET /incentive_schedules): what each "
+        "market of a series, or of one event, can expect to earn window after "
+        "window. A schedule is anticipated, not promised, unless all_markets is "
+        "true. The incentives themselves are listed by list_incentive_programs."
+    ),
+    input_schema=GetIncentiveSchedulesRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_incentive_schedules(request: dict[str, Any]) -> Any:
+    GetIncentiveSchedulesRequest(**request)
+    return await kalshi_client.get_incentive_schedules()
+
+
+@ToolRegistry.register_tool(
+    name="get_fcm_fills",
+    description=(
+        "FCM members only. Get fills across the authenticated FCM's subtraders "
+        "(GET /fcm/fills). Direct member accounts are not this endpoint; they use "
+        "get_fills."
+    ),
+    input_schema=GetFCMFillsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_fcm_fills(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_fcm_fills(_params(request, GetFCMFillsRequest))
+
+
+@ToolRegistry.register_tool(
+    name="get_fcm_orders",
+    description=(
+        "FCM members only. Get orders for the FCM's subtraders (GET /fcm/orders). "
+        "The spec marks subtrader_id and client_order_ids optional. Its description "
+        "says at least one is required unless the API key is bound to a subtrader, "
+        "in which case subtrader_id defaults to that subtrader and must equal it "
+        "when supplied. Supplying both returns orders matching both filters."
+    ),
+    input_schema=GetFCMOrdersRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_fcm_orders(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_fcm_orders(_params(request, GetFCMOrdersRequest))
+
+
+@ToolRegistry.register_tool(
+    name="list_fcm_subtraders",
+    description=(
+        "FCM members only. List the authenticated FCM's event-contract subtraders, "
+        "including accounts with no trades (GET /fcm/subtraders). Exchange metadata "
+        "is asynchronous, so newly created accounts may not appear immediately. "
+        "fcm_trading_blocked identifies the FCM's own per-subtrader restriction."
+    ),
+    input_schema=ListFCMSubtradersRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_list_fcm_subtraders(request: dict[str, Any]) -> Any:
+    ListFCMSubtradersRequest(**request)
+    return await kalshi_client.list_fcm_subtraders()
+
+
+@ToolRegistry.register_tool(
+    name="get_fcm_event_contract_daily_cap",
+    description=(
+        "FCM members only. Get one subtrader's event-contract daily premium cap and "
+        "its live utilization (GET /fcm/subtraders/event_contract_daily_cap). "
+        "Executed utilization resets at midnight New York time; resting and pending "
+        "reservations last as long as their orders stay open. Returns 404 when no "
+        "cap is configured, in which state orders placed through the subtrader's "
+        "bound API keys are rejected. An API key bound to one subtrader may omit "
+        "subtrader_id; if supplied it must equal the bound subtrader."
+    ),
+    input_schema=GetFCMEventContractDailyCapRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_fcm_event_contract_daily_cap(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_fcm_event_contract_daily_cap(
+        _params(request, GetFCMEventContractDailyCapRequest)
+    )
+
+
+@ToolRegistry.register_tool(
+    name="get_fcm_subtrader_blocked_categories",
+    description=(
+        "FCM members only. Get the event categories an FCM has blocked for one "
+        "subtrader (GET /fcm/subtraders/blocked_categories). The subtrader must "
+        "belong to the requesting FCM. A subtrader with no blocks returns an empty "
+        "list."
+    ),
+    input_schema=GetFCMSubtraderBlockedCategoriesRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_fcm_subtrader_blocked_categories(request: dict[str, Any]) -> Any:
+    req = GetFCMSubtraderBlockedCategoriesRequest(**request)
+    return await kalshi_client.get_fcm_subtrader_blocked_categories(req.subtrader_id)
+
+
+@ToolRegistry.register_tool(
+    name="get_target_balance_allocation",
+    description=(
+        "Get the caller's target balance allocation across exchange indexes "
+        "(GET /portfolio/target_balance_allocation)."
+    ),
+    input_schema=GetTargetBalanceAllocationRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_target_balance_allocation(request: dict[str, Any]) -> Any:
+    GetTargetBalanceAllocationRequest(**request)
+    return await kalshi_client.get_target_balance_allocation()
+
+
+@ToolRegistry.register_tool(
+    name="get_fcm_positions",
+    description=(
+        "FCM members only. Get market positions for the FCM's subtraders "
+        "(GET /fcm/positions). subtrader_id is optional in the spec: required "
+        "unless the API key is bound to a subtrader, in which case it defaults to "
+        "that subtrader and must equal it when supplied. settlement_status defaults "
+        "to unsettled. count_filter is a comma-separated list; the spec does not "
+        "name the fields. Direct member accounts use get_positions."
+    ),
+    input_schema=GetFCMPositionsRequest,
+    read_only=True,
+    destructive=False,
+    idempotent=True,
+    open_world=False,
+)
+async def handle_get_fcm_positions(request: dict[str, Any]) -> Any:
+    return await kalshi_client.get_fcm_positions(
+        _params(request, GetFCMPositionsRequest)
+    )
+
+
 async def handle_call_tool(
     name: str, arguments: dict[str, Any] | None = None
 ) -> list[types.TextContent]:
@@ -2215,7 +3075,7 @@ def main() -> None:
 
 
 # Settings are read at import. The default (full, discovery off) adds nothing,
-# so the served catalog stays the 59 tools registered above.
+# so the served catalog stays the 101 tools registered above.
 _apply_discovery(
     mcp,
     profile=settings.KALSHI_MCP_PROFILE,

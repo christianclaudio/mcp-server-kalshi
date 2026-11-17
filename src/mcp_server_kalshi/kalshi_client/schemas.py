@@ -1,6 +1,6 @@
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, StrictBool, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 
 
 class MCPSchemaBaseModel(BaseModel):
@@ -962,5 +962,734 @@ class GetRFQBatchQuotesRequest(MCPSchemaBaseModel):
         description=(
             "RFQ batch UUID returned when the batch was created. Pass it unchanged; "
             "malformed IDs return HTTP 400."
+        ),
+    )
+
+
+# ---- Remaining OpenAPI v3.36.0 GETs --------------------------------------------
+# Parameter names, required flags, enums, and bounds are the spec's. Optional
+# fields are omitted on the wire unless set; a spec default is what Kalshi applies
+# when the parameter is absent.
+
+
+class GetEventContractExitTriggersRequest(MCPSchemaBaseModel):
+    """GET /portfolio/positions/{ticker}/exit_trigger.
+
+    Hidden from the published docs (``x-excluded``) until event-contract
+    take-profit / stop-loss launches.
+    """
+
+    ticker: str = Field(..., description="Market ticker of the position.")
+    subaccount: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Subaccount number (0 for primary, 1-63 for subaccounts). Defaults to 0. "
+            "Subaccount-restricted API keys default to their locked subaccount and "
+            "must omit this parameter or pass their locked subaccount."
+        ),
+    )
+    kind: Literal["bracket"] | None = Field(
+        default=None,
+        description="Exit-trigger kind. The spec's only value is bracket.",
+    )
+
+
+class GetSeriesFeeChangesRequest(MCPSchemaBaseModel):
+    """GET /series/fee_changes."""
+
+    series_ticker: str | None = Field(
+        default=None, description="Filter by series ticker."
+    )
+    show_historical: bool | None = Field(
+        default=None,
+        description="Include historical fee changes. Defaults to false.",
+    )
+
+
+class GetExchangeUserDataTimestampRequest(EmptyRequest):
+    """GET /exchange/user_data_timestamp."""
+
+
+class GetMarketOrderbooksRequest(MCPSchemaBaseModel):
+    """GET /markets/orderbooks. ``tickers`` is form-style and exploded."""
+
+    tickers: list[Annotated[str, Field(max_length=200)]] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="List of market tickers to fetch orderbooks for.",
+    )
+
+
+class GetEventCandlesticksRequest(MCPSchemaBaseModel):
+    """GET /series/{series_ticker}/events/{ticker}/candlesticks."""
+
+    series_ticker: str = Field(..., description="The series ticker.")
+    ticker: str = Field(..., description="The event ticker.")
+    start_ts: int = Field(..., description="Start timestamp for the range.")
+    end_ts: int = Field(..., description="End timestamp for the range.")
+    period_interval: Literal[1, 60, 1440] = Field(
+        ...,
+        description=(
+            "Length of each candlestick period, in minutes. "
+            "Must be one minute, one hour, or one day."
+        ),
+    )
+
+
+class ListMultivariateEventsRequest(_Paginated):
+    """GET /events/multivariate."""
+
+    limit: int | None = _page_limit(200)
+    series_ticker: str | None = Field(
+        default=None, description="Filter by series ticker."
+    )
+    collection_ticker: str | None = Field(
+        default=None,
+        description=(
+            "Filter events by collection ticker. Returns only multivariate events "
+            "belonging to the specified collection. Cannot be used together with "
+            "series_ticker."
+        ),
+    )
+    tickers: str | None = Field(
+        default=None,
+        description=(
+            "Filter by specific event tickers. Comma-separated list of event "
+            "tickers to retrieve."
+        ),
+    )
+    with_nested_markets: bool | None = Field(
+        default=None,
+        description=(
+            "When true, each event includes a markets field. Defaults to false."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _exclusive_collection_and_series(self) -> "ListMultivariateEventsRequest":
+        # GET /events/multivariate: collection_ticker "Cannot be used together with
+        # series_ticker."
+        if self.collection_ticker is not None and self.series_ticker is not None:
+            raise ValueError(
+                "collection_ticker cannot be used together with series_ticker."
+            )
+        return self
+
+
+class GetEventFeeChangesRequest(_Paginated):
+    """GET /events/fee_changes."""
+
+    event_ticker: str | None = Field(
+        default=None, description="Filter by event ticker."
+    )
+    limit: int | None = _page_limit(1000)
+
+
+class GetEventMetadataRequest(MCPSchemaBaseModel):
+    """GET /events/{event_ticker}/metadata."""
+
+    event_ticker: str = Field(..., description="Event ticker.")
+
+
+class GetEventForecastPercentileHistoryRequest(MCPSchemaBaseModel):
+    """GET /series/{series_ticker}/events/{ticker}/forecast_percentile_history."""
+
+    series_ticker: str = Field(..., description="The series ticker.")
+    ticker: str = Field(..., description="The event ticker.")
+    percentiles: list[Annotated[int, Field(ge=0, le=9999)]] = Field(
+        ...,
+        max_length=10,
+        description="Percentile values to retrieve (0-9999, max 10 values).",
+    )
+    start_ts: int = Field(..., description="Start timestamp for the range.")
+    end_ts: int = Field(..., description="End timestamp for the range.")
+    period_interval: Literal[0, 1, 60, 1440] = Field(
+        ...,
+        description=(
+            "Length of each forecast period, in minutes. 0 for 5-second intervals, "
+            "or 1, 60, or 1440 for minute-based intervals."
+        ),
+    )
+
+
+class GetOrderGroupRequest(MCPSchemaBaseModel):
+    """GET /portfolio/order_groups/{order_group_id}."""
+
+    order_group_id: str = Field(..., description="Order group ID.")
+    subaccount: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Subaccount number (0 for primary, 1-63 for subaccounts). "
+            "If omitted, defaults to all subaccounts."
+        ),
+    )
+
+
+class ListIntraExchangeInstanceTransfersRequest(_Paginated):
+    """GET /portfolio/intra_exchange_instance_transfers."""
+
+    limit: int | None = _page_limit(500)
+
+
+class GetIntraExchangeInstanceTransferRequest(MCPSchemaBaseModel):
+    """GET /portfolio/intra_exchange_instance_transfers/{transfer_id}."""
+
+    transfer_id: str = Field(
+        ..., description="Transfer id returned by the creation endpoint."
+    )
+
+
+class GetCreditHistoryRequest(_Paginated):
+    """GET /portfolio/credit_history. min_ts is inclusive and max_ts is exclusive."""
+
+    min_ts: int | None = Field(
+        default=None, description="Filter items after this Unix timestamp."
+    )
+    max_ts: int | None = Field(
+        default=None, description="Filter items before this Unix timestamp."
+    )
+
+
+class GetCommunicationsIdRequest(EmptyRequest):
+    """GET /communications/id."""
+
+
+class ListBlockTradeProposalsRequest(_Paginated):
+    """GET /communications/block-trade-proposals."""
+
+    limit: int | None = _page_limit(100)
+    market_ticker: str | None = Field(
+        default=None, description="Filter by market ticker."
+    )
+    status: str | None = Field(
+        default=None,
+        description=(
+            "Filter block trade proposals by status. The spec types this as a "
+            "string and does not list the allowed values."
+        ),
+    )
+
+
+class ListRFQsRequest(_Paginated):
+    """GET /communications/rfqs."""
+
+    limit: int | None = _page_limit(100)
+    event_ticker: str | None = Field(
+        default=None,
+        description="Event ticker to filter by. Only a single event ticker is supported.",
+    )
+    market_ticker: str | None = Field(
+        default=None, description="Filter by market ticker."
+    )
+    subaccount: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Subaccount number (0 for primary, 1-63 for subaccounts). "
+            "If omitted, defaults to all subaccounts."
+        ),
+    )
+    status: str | None = Field(
+        default=None,
+        description=(
+            "Filter RFQs by status. The spec types this as a string and does not "
+            "list the allowed values."
+        ),
+    )
+    creator_user_id: str | None = Field(
+        default=None,
+        description=(
+            "Deprecated. Filter RFQs by creator user UUID. Use user_filter=self "
+            "for the authenticated user."
+        ),
+    )
+    user_filter: Literal["self"] | None = Field(
+        default=None,
+        description=(
+            "Omit to return all results. Use self to filter by the authenticated user."
+        ),
+    )
+
+
+class GetRFQRequest(MCPSchemaBaseModel):
+    """GET /communications/rfqs/{rfq_id}."""
+
+    rfq_id: str = Field(
+        ...,
+        description=(
+            "RFQ UUID returned when the RFQ was created. Pass it unchanged; "
+            "malformed IDs return HTTP 400."
+        ),
+    )
+
+
+class GetRFQQuoteRequest(MCPSchemaBaseModel):
+    """GET /communications/rfqs/{rfq_id}/quotes/{quote_id}."""
+
+    rfq_id: str = Field(
+        ...,
+        description=(
+            "RFQ UUID returned when the RFQ was created. Pass it unchanged; "
+            "malformed IDs return HTTP 400."
+        ),
+    )
+    quote_id: str = Field(
+        ...,
+        description=(
+            "Quote UUID. Pass the ID exactly as received when the quote was created; "
+            "malformed IDs return HTTP 400."
+        ),
+    )
+
+
+class ListQuotesRequest(_Paginated):
+    """GET /communications/quotes."""
+
+    limit: int | None = _page_limit(500)
+    min_ts: int | None = Field(
+        default=None,
+        description=(
+            "Restricts the response to quotes last updated after a Unix timestamp."
+        ),
+    )
+    max_ts: int | None = Field(
+        default=None,
+        description=(
+            "Restricts the response to quotes last updated before a Unix timestamp."
+        ),
+    )
+    status: str | None = Field(
+        default=None,
+        description=(
+            "Filter quotes by status. The spec types this as a string and does not "
+            "list the allowed values."
+        ),
+    )
+    quote_creator_user_id: str | None = Field(
+        default=None,
+        description="Deprecated. Filter quotes by quote creator user ID.",
+    )
+    user_filter: Literal["self"] | None = Field(
+        default=None,
+        description="Filter for quotes created by the authenticated user.",
+    )
+    rfq_user_filter: Literal["self"] | None = Field(
+        default=None,
+        description=(
+            "Filter for quotes responding to RFQs created by the authenticated user."
+        ),
+    )
+    rfq_creator_user_id: str | None = Field(
+        default=None,
+        description="Deprecated. Filter quotes by RFQ creator user ID.",
+    )
+    rfq_creator_subtrader_id: str | None = Field(
+        default=None,
+        description="Filter quotes by RFQ creator subtrader ID (FCM members only).",
+    )
+    rfq_id: str | None = Field(
+        default=None,
+        description=(
+            "Filter quotes by RFQ UUID. Pass the RFQ ID unchanged; malformed IDs "
+            "return HTTP 400."
+        ),
+    )
+
+
+class GetQuoteRequest(MCPSchemaBaseModel):
+    """GET /communications/quotes/{quote_id}. Deprecated in the spec."""
+
+    quote_id: str = Field(
+        ...,
+        description=(
+            "Quote UUID. Pass the ID exactly as received when the quote was created; "
+            "malformed IDs return HTTP 400."
+        ),
+    )
+
+
+class ListApiKeysRequest(MCPSchemaBaseModel):
+    """GET /api_keys."""
+
+    fcm_subtrader_id: str | None = Field(
+        default=None,
+        description=(
+            "Return only API keys bound to this FCM subtrader. Spelled "
+            "{your_user_id}_{suffix}; only FCM members hold bound keys. "
+            "Omit to return every key."
+        ),
+    )
+
+
+class GetAccountApiUsageLevelVolumeProgressRequest(EmptyRequest):
+    """GET /account/api_usage_level/volume_progress."""
+
+
+class GetLiveDataByMilestoneRequest(MCPSchemaBaseModel):
+    """GET /live_data/milestone/{milestone_id}."""
+
+    milestone_id: str = Field(..., description="Milestone ID.")
+    include_player_stats: bool | None = Field(
+        default=None,
+        description=(
+            "When true, include player-level statistics. Supported for Pro Football, "
+            "Pro Basketball, and College Men's Basketball milestones that have "
+            "player ID mappings. Defaults to false."
+        ),
+    )
+
+
+class GetLiveDataRequest(MCPSchemaBaseModel):
+    """GET /live_data/{type}/milestone/{milestone_id}. Legacy path; prefer the untyped one."""
+
+    type: str = Field(..., description="Type of live data.")
+    milestone_id: str = Field(..., description="Milestone ID.")
+    include_player_stats: bool | None = Field(
+        default=None,
+        description=(
+            "When true, include player-level statistics. Supported for Pro Football, "
+            "Pro Basketball, and College Men's Basketball milestones that have "
+            "player ID mappings. Defaults to false."
+        ),
+    )
+
+
+class GetGameStatsRequest(MCPSchemaBaseModel):
+    """GET /live_data/milestone/{milestone_id}/game_stats."""
+
+    milestone_id: str = Field(..., description="Milestone ID.")
+
+
+class GetWeatherIndexRequest(MCPSchemaBaseModel):
+    """GET /live_data/weather/{city}.
+
+    ``last_sec`` is mutually exclusive with ``from`` / ``to``. ``from`` must be
+    paired with ``to`` unless ``last_sec`` is used. The spec does not forbid
+    ``to`` alone.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    city: str = Field(..., description="Index city ID (e.g. miami).")
+    from_: int | None = Field(
+        default=None,
+        alias="from",
+        description=(
+            "Window start, unix milliseconds (inclusive). Defaults to to minus 24 "
+            "hours. Must be paired with to unless last_sec is used."
+        ),
+    )
+    to: int | None = Field(
+        default=None,
+        description="Window end, unix milliseconds (inclusive). Defaults to now.",
+    )
+    last_sec: int | None = Field(
+        default=None,
+        description=(
+            "Trailing window in seconds; equivalent to from=now-last_sec, to=now. "
+            "Mutually exclusive with from/to."
+        ),
+    )
+    detailed: bool | None = Field(
+        default=None,
+        description="Include per-station audit readings on every point.",
+    )
+
+    @model_validator(mode="after")
+    def _window(self) -> "GetWeatherIndexRequest":
+        if self.last_sec is not None and (
+            self.from_ is not None or self.to is not None
+        ):
+            raise ValueError("last_sec cannot be combined with from or to.")
+        if self.from_ is not None and self.to is None:
+            raise ValueError("from must be paired with to.")
+        return self
+
+
+class GetWeatherIndexCalibrationsRequest(MCPSchemaBaseModel):
+    """GET /live_data/weather/{city}/calibrations."""
+
+    city: str = Field(..., description="Index city ID (e.g. miami).")
+
+
+class ListStructuredTargetsRequest(MCPSchemaBaseModel):
+    """GET /structured_targets. ``ids`` is form-style and exploded."""
+
+    ids: list[str] | None = Field(
+        default=None,
+        max_length=2000,
+        description=(
+            "Filter by specific structured target IDs. Repeat the parameter "
+            "(ids=uuid1&ids=uuid2)."
+        ),
+    )
+    type: str | None = Field(
+        default=None, description="Filter by structured target type."
+    )
+    competition: str | None = Field(
+        default=None,
+        description=(
+            "Filter by competition. Matches the league, conference, division, or "
+            "tour in the structured target details, or any entry in the details "
+            "leagues array."
+        ),
+    )
+    page_size: int | None = Field(
+        default=None,
+        ge=1,
+        le=2000,
+        description="Number of items per page (min 1, max 2000, default 100).",
+    )
+    cursor: str | None = Field(default=None, description="Pagination cursor.")
+
+
+class GetStructuredTargetRequest(MCPSchemaBaseModel):
+    """GET /structured_targets/{structured_target_id}."""
+
+    structured_target_id: str = Field(..., description="Structured target ID.")
+
+
+class GetWeatherPointAvailabilityRequest(EmptyRequest):
+    """GET /weather_point_markets/availability."""
+
+
+class GetConcertCancellationAvailabilityRequest(MCPSchemaBaseModel):
+    """GET /concert_cancellation_markets/availability."""
+
+    date_from: str | None = Field(
+        default=None,
+        description=(
+            "Count shows from this venue-local date, as YYYY-MM-DD. "
+            "Omitted counts from today."
+        ),
+    )
+    date_to: str | None = Field(
+        default=None,
+        description=(
+            "Count shows up to this venue-local date, inclusive, as YYYY-MM-DD. "
+            "Omitted for no end."
+        ),
+    )
+
+
+class ListConcertsRequest(MCPSchemaBaseModel):
+    """GET /concert_cancellation_markets/concerts."""
+
+    metro_id: str = Field(
+        ...,
+        description=(
+            "One of the metros from get_concert_cancellation_availability, "
+            "such as jambase:1."
+        ),
+    )
+    date_from: str | None = Field(
+        default=None,
+        description=(
+            "List shows from this venue-local date, as YYYY-MM-DD. Omitted, or a "
+            "date that has passed, lists from today."
+        ),
+    )
+    date_to: str | None = Field(
+        default=None,
+        description=(
+            "List shows up to this venue-local date, inclusive, as YYYY-MM-DD. "
+            "Must not be before date_from. Omitted for no end."
+        ),
+    )
+    page: int | None = Field(
+        default=None,
+        ge=1,
+        le=20,
+        description="Page to return, starting at 1. Defaults to 1.",
+    )
+
+
+class SearchConcertsRequest(MCPSchemaBaseModel):
+    """GET /concert_cancellation_markets/concerts/search."""
+
+    q: str = Field(
+        ...,
+        min_length=2,
+        max_length=80,
+        description=(
+            "The name to search for, or part of one. 2 to 80 characters; some "
+            "searches need at least 3."
+        ),
+    )
+
+
+class ListIncentiveProgramsRequest(_Paginated):
+    """GET /incentive_programs."""
+
+    limit: int | None = _page_limit(10000)
+    status: Literal["all", "active", "upcoming", "closed", "paid_out"] | None = Field(
+        default=None,
+        description=(
+            'Status filter: "all", "active", "upcoming", "closed", or "paid_out". '
+            'Default is "all".'
+        ),
+    )
+    type: (
+        Literal[
+            "all", "liquidity", "volume", "margin_maker_volume", "margin_taker_volume"
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description=(
+            'Type filter: "all", "liquidity", "volume", "margin_maker_volume", or '
+            '"margin_taker_volume". Default is "all".'
+        ),
+    )
+    incentive_description: str | None = Field(
+        default=None, description="Filter by exact incentive description."
+    )
+    series_ticker: str | None = Field(
+        default=None, description="Filter to one series' incentives."
+    )
+    event_ticker: str | None = Field(
+        default=None,
+        description=(
+            "Filter to one event's incentives. A perpetual's incentives belong to "
+            "no event."
+        ),
+    )
+
+
+class GetIncentiveSchedulesRequest(EmptyRequest):
+    """GET /incentive_schedules."""
+
+
+class GetFCMFillsRequest(MCPSchemaBaseModel):
+    """GET /fcm/fills. FCM members only. The spec has no limit parameter."""
+
+    min_ts: int | None = Field(
+        default=None, description="Filter items after this Unix timestamp."
+    )
+    max_ts: int | None = Field(
+        default=None, description="Filter items before this Unix timestamp."
+    )
+    cursor: str | None = Field(
+        default=None,
+        description=(
+            "Pagination cursor. Use the cursor value returned from the previous "
+            "response to get the next page. Leave empty for the first page."
+        ),
+    )
+
+
+class GetFCMOrdersRequest(_Paginated):
+    """GET /fcm/orders. FCM members only.
+
+    The spec marks both ``subtrader_id`` and ``client_order_ids`` optional.
+    Its description says at least one is required unless the API key is bound
+    to a subtrader, in which case ``subtrader_id`` defaults to that subtrader.
+    """
+
+    subtrader_id: str | None = Field(
+        default=None,
+        description=(
+            "Restricts the response to orders for a specific subtrader "
+            "(FCM members only). Required unless client_order_ids is supplied. "
+            "For an API key bound to a subtrader, defaults to the bound subtrader "
+            "when omitted and must equal it when supplied."
+        ),
+    )
+    client_order_ids: str | None = Field(
+        default=None,
+        description=(
+            "Client order IDs to filter by, as a comma-separated list (maximum 100). "
+            "Required unless subtrader_id is supplied."
+        ),
+    )
+    event_ticker: str | None = Field(
+        default=None,
+        description="Event ticker to filter by. Only a single event ticker is supported.",
+    )
+    ticker: str | None = Field(default=None, description="Filter by market ticker.")
+    min_ts: int | None = Field(
+        default=None,
+        description="Restricts the response to orders after a Unix timestamp.",
+    )
+    max_ts: int | None = Field(
+        default=None,
+        description="Restricts the response to orders before a Unix timestamp.",
+    )
+    status: Literal["resting", "canceled", "executed"] | None = Field(
+        default=None,
+        description="Restricts the response to orders that have a certain status.",
+    )
+
+
+class ListFCMSubtradersRequest(EmptyRequest):
+    """GET /fcm/subtraders. FCM members only."""
+
+
+class GetFCMEventContractDailyCapRequest(MCPSchemaBaseModel):
+    """GET /fcm/subtraders/event_contract_daily_cap. FCM members only."""
+
+    subtrader_id: str | None = Field(
+        default=None,
+        description=(
+            "The subtrader whose daily cap should be returned. Must belong to the "
+            "requesting FCM. Required unless the API key is bound to a subtrader, "
+            "in which case it defaults to the bound subtrader when omitted and must "
+            "equal it when supplied."
+        ),
+    )
+
+
+class GetFCMSubtraderBlockedCategoriesRequest(MCPSchemaBaseModel):
+    """GET /fcm/subtraders/blocked_categories. FCM members only."""
+
+    subtrader_id: str = Field(
+        ...,
+        description=(
+            "The subtrader whose blocked categories should be returned. "
+            "Must belong to the requesting FCM."
+        ),
+    )
+
+
+class GetTargetBalanceAllocationRequest(EmptyRequest):
+    """GET /portfolio/target_balance_allocation."""
+
+
+class GetFCMPositionsRequest(_Paginated):
+    """GET /fcm/positions. FCM members only.
+
+    ``subtrader_id`` is optional in the spec: required unless the API key is
+    bound to a subtrader, in which case it defaults to that subtrader.
+    ``count_filter`` is a comma-separated list; the spec does not name the fields.
+    """
+
+    subtrader_id: str | None = Field(
+        default=None,
+        description=(
+            "Restricts the response to positions for a specific subtrader "
+            "(FCM members only). Required unless the API key is bound to a "
+            "subtrader, in which case it defaults to the bound subtrader when "
+            "omitted and must equal it when supplied."
+        ),
+    )
+    ticker: str | None = Field(default=None, description="Ticker of desired positions.")
+    event_ticker: str | None = Field(
+        default=None, description="Event ticker of desired positions."
+    )
+    count_filter: str | None = Field(
+        default=None,
+        description=(
+            "Restricts the positions to those with any of the following fields "
+            "with non-zero values, as a comma-separated list. The spec does not "
+            "name the fields."
+        ),
+    )
+    settlement_status: Literal["all", "unsettled", "settled"] | None = Field(
+        default=None,
+        description=(
+            "Settlement status of the markets to return. Defaults to unsettled."
         ),
     )
