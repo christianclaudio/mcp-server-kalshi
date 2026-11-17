@@ -181,6 +181,8 @@ paths:
     get:
       parameters: []
   /portfolio/order_groups/{order_group_id}:
+    get:
+      parameters: []
     delete:
       parameters: []
 
@@ -251,6 +253,129 @@ paths:
     get:
       parameters: []
   /communications/rfq_batches/{rfq_batch_id}/quotes:
+    get:
+      parameters: []
+  /portfolio/positions/{ticker}/exit_trigger:
+    get:
+      parameters: []
+  /series/fee_changes:
+    get:
+      parameters: []
+  /exchange/user_data_timestamp:
+    get:
+      parameters: []
+  /markets/orderbooks:
+    get:
+      parameters: []
+  /series/{series_ticker}/events/{ticker}/candlesticks:
+    get:
+      parameters: []
+  /events/multivariate:
+    get:
+      parameters: []
+  /events/fee_changes:
+    get:
+      parameters: []
+  /events/{event_ticker}/metadata:
+    get:
+      parameters: []
+  /series/{series_ticker}/events/{ticker}/forecast_percentile_history:
+    get:
+      parameters: []
+  /portfolio/intra_exchange_instance_transfers:
+    get:
+      parameters: []
+  /portfolio/intra_exchange_instance_transfers/{transfer_id}:
+    get:
+      parameters: []
+  /portfolio/credit_history:
+    get:
+      parameters: []
+  /communications/id:
+    get:
+      parameters: []
+  /communications/block-trade-proposals:
+    get:
+      parameters: []
+  /communications/rfqs:
+    get:
+      parameters: []
+  /communications/rfqs/{rfq_id}:
+    get:
+      parameters: []
+  /communications/rfqs/{rfq_id}/quotes/{quote_id}:
+    get:
+      parameters: []
+  /communications/quotes:
+    get:
+      parameters: []
+  /communications/quotes/{quote_id}:
+    get:
+      parameters: []
+  /api_keys:
+    get:
+      parameters: []
+  /account/api_usage_level/volume_progress:
+    get:
+      parameters: []
+  /live_data/milestone/{milestone_id}:
+    get:
+      parameters: []
+  /live_data/{type}/milestone/{milestone_id}:
+    get:
+      parameters: []
+  /live_data/milestone/{milestone_id}/game_stats:
+    get:
+      parameters: []
+  /live_data/weather/{city}:
+    get:
+      parameters: []
+  /live_data/weather/{city}/calibrations:
+    get:
+      parameters: []
+  /structured_targets:
+    get:
+      parameters: []
+  /structured_targets/{structured_target_id}:
+    get:
+      parameters: []
+  /weather_point_markets/availability:
+    get:
+      parameters: []
+  /concert_cancellation_markets/availability:
+    get:
+      parameters: []
+  /concert_cancellation_markets/concerts:
+    get:
+      parameters: []
+  /concert_cancellation_markets/concerts/search:
+    get:
+      parameters: []
+  /incentive_programs:
+    get:
+      parameters: []
+  /incentive_schedules:
+    get:
+      parameters: []
+  /fcm/fills:
+    get:
+      parameters: []
+  /fcm/orders:
+    get:
+      parameters: []
+  /fcm/subtraders:
+    get:
+      parameters: []
+  /fcm/subtraders/event_contract_daily_cap:
+    get:
+      parameters: []
+  /fcm/subtraders/blocked_categories:
+    get:
+      parameters: []
+  /portfolio/target_balance_allocation:
+    get:
+      parameters: []
+  /fcm/positions:
     get:
       parameters: []
 """)
