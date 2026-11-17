@@ -531,3 +531,259 @@ class KalshiAPIClient(BaseAPIClient):
         self._require_auth()
         quoted = urllib.parse.quote(rfq_batch_id, safe="")
         return await self.get(f"/communications/rfq_batches/{quoted}/quotes")
+
+    # ---- Remaining OpenAPI v3.36.0 GETs ----------------------------------------
+    async def get_event_contract_exit_triggers(
+        self, ticker: str, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /portfolio/positions/{ticker}/exit_trigger."""
+        self._require_auth()
+        quoted = urllib.parse.quote(ticker, safe="")
+        return await self.get(
+            f"/portfolio/positions/{quoted}/exit_trigger", params=params
+        )
+
+    async def get_series_fee_changes(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /series/fee_changes."""
+        return await self.get("/series/fee_changes", params=params)
+
+    async def get_exchange_user_data_timestamp(self) -> Any:
+        """GET /exchange/user_data_timestamp."""
+        return await self.get("/exchange/user_data_timestamp")
+
+    async def get_market_orderbooks(self, params: dict[str, Any]) -> Any:
+        """GET /markets/orderbooks."""
+        return await self.get("/markets/orderbooks", params=params)
+
+    async def get_event_candlesticks(
+        self, series_ticker: str, ticker: str, params: dict[str, Any]
+    ) -> Any:
+        """GET /series/{series_ticker}/events/{ticker}/candlesticks."""
+        series = urllib.parse.quote(series_ticker, safe="")
+        event = urllib.parse.quote(ticker, safe="")
+        return await self.get(
+            f"/series/{series}/events/{event}/candlesticks", params=params
+        )
+
+    async def list_multivariate_events(
+        self, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /events/multivariate."""
+        return await self.get("/events/multivariate", params=params)
+
+    async def get_event_fee_changes(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /events/fee_changes."""
+        return await self.get("/events/fee_changes", params=params)
+
+    async def get_event_metadata(self, event_ticker: str) -> Any:
+        """GET /events/{event_ticker}/metadata."""
+        quoted = urllib.parse.quote(event_ticker, safe="")
+        return await self.get(f"/events/{quoted}/metadata")
+
+    async def get_event_forecast_percentile_history(
+        self, series_ticker: str, ticker: str, params: dict[str, Any]
+    ) -> Any:
+        """GET /series/{series_ticker}/events/{ticker}/forecast_percentile_history."""
+        self._require_auth()
+        series = urllib.parse.quote(series_ticker, safe="")
+        event = urllib.parse.quote(ticker, safe="")
+        return await self.get(
+            f"/series/{series}/events/{event}/forecast_percentile_history",
+            params=params,
+        )
+
+    async def get_order_group(
+        self, order_group_id: str, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /portfolio/order_groups/{order_group_id}."""
+        self._require_auth()
+        quoted = urllib.parse.quote(order_group_id, safe="")
+        return await self.get(f"/portfolio/order_groups/{quoted}", params=params)
+
+    async def list_intra_exchange_instance_transfers(
+        self, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /portfolio/intra_exchange_instance_transfers."""
+        self._require_auth()
+        return await self.get(
+            "/portfolio/intra_exchange_instance_transfers", params=params
+        )
+
+    async def get_intra_exchange_instance_transfer(self, transfer_id: str) -> Any:
+        """GET /portfolio/intra_exchange_instance_transfers/{transfer_id}."""
+        self._require_auth()
+        quoted = urllib.parse.quote(transfer_id, safe="")
+        return await self.get(f"/portfolio/intra_exchange_instance_transfers/{quoted}")
+
+    async def get_credit_history(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /portfolio/credit_history."""
+        self._require_auth()
+        return await self.get("/portfolio/credit_history", params=params)
+
+    async def get_communications_id(self) -> Any:
+        """GET /communications/id."""
+        self._require_auth()
+        return await self.get("/communications/id")
+
+    async def list_block_trade_proposals(
+        self, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /communications/block-trade-proposals."""
+        self._require_auth()
+        return await self.get("/communications/block-trade-proposals", params=params)
+
+    async def list_rfqs(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /communications/rfqs."""
+        self._require_auth()
+        return await self.get("/communications/rfqs", params=params)
+
+    async def get_rfq(self, rfq_id: str) -> Any:
+        """GET /communications/rfqs/{rfq_id}."""
+        self._require_auth()
+        quoted = urllib.parse.quote(rfq_id, safe="")
+        return await self.get(f"/communications/rfqs/{quoted}")
+
+    async def get_rfq_quote(self, rfq_id: str, quote_id: str) -> Any:
+        """GET /communications/rfqs/{rfq_id}/quotes/{quote_id}."""
+        self._require_auth()
+        rfq = urllib.parse.quote(rfq_id, safe="")
+        quote = urllib.parse.quote(quote_id, safe="")
+        return await self.get(f"/communications/rfqs/{rfq}/quotes/{quote}")
+
+    async def list_quotes(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /communications/quotes."""
+        self._require_auth()
+        return await self.get("/communications/quotes", params=params)
+
+    async def get_quote(self, quote_id: str) -> Any:
+        """GET /communications/quotes/{quote_id}. Deprecated in the spec."""
+        self._require_auth()
+        quoted = urllib.parse.quote(quote_id, safe="")
+        return await self.get(f"/communications/quotes/{quoted}")
+
+    async def list_api_keys(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /api_keys."""
+        self._require_auth()
+        return await self.get("/api_keys", params=params)
+
+    async def get_account_api_usage_level_volume_progress(self) -> Any:
+        """GET /account/api_usage_level/volume_progress."""
+        self._require_auth()
+        return await self.get("/account/api_usage_level/volume_progress")
+
+    async def get_live_data_by_milestone(
+        self, milestone_id: str, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /live_data/milestone/{milestone_id}."""
+        quoted = urllib.parse.quote(milestone_id, safe="")
+        return await self.get(f"/live_data/milestone/{quoted}", params=params)
+
+    async def get_live_data(
+        self, live_type: str, milestone_id: str, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /live_data/{type}/milestone/{milestone_id}."""
+        kind = urllib.parse.quote(live_type, safe="")
+        quoted = urllib.parse.quote(milestone_id, safe="")
+        return await self.get(f"/live_data/{kind}/milestone/{quoted}", params=params)
+
+    async def get_game_stats(self, milestone_id: str) -> Any:
+        """GET /live_data/milestone/{milestone_id}/game_stats."""
+        quoted = urllib.parse.quote(milestone_id, safe="")
+        return await self.get(f"/live_data/milestone/{quoted}/game_stats")
+
+    async def get_weather_index(
+        self, city: str, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /live_data/weather/{city}."""
+        quoted = urllib.parse.quote(city, safe="")
+        return await self.get(f"/live_data/weather/{quoted}", params=params)
+
+    async def get_weather_index_calibrations(self, city: str) -> Any:
+        """GET /live_data/weather/{city}/calibrations."""
+        quoted = urllib.parse.quote(city, safe="")
+        return await self.get(f"/live_data/weather/{quoted}/calibrations")
+
+    async def list_structured_targets(
+        self, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /structured_targets."""
+        return await self.get("/structured_targets", params=params)
+
+    async def get_structured_target(self, structured_target_id: str) -> Any:
+        """GET /structured_targets/{structured_target_id}."""
+        quoted = urllib.parse.quote(structured_target_id, safe="")
+        return await self.get(f"/structured_targets/{quoted}")
+
+    async def get_weather_point_availability(self) -> Any:
+        """GET /weather_point_markets/availability."""
+        return await self.get("/weather_point_markets/availability")
+
+    async def get_concert_cancellation_availability(
+        self, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /concert_cancellation_markets/availability."""
+        return await self.get(
+            "/concert_cancellation_markets/availability", params=params
+        )
+
+    async def list_concerts(self, params: dict[str, Any]) -> Any:
+        """GET /concert_cancellation_markets/concerts."""
+        self._require_auth()
+        return await self.get("/concert_cancellation_markets/concerts", params=params)
+
+    async def search_concerts(self, params: dict[str, Any]) -> Any:
+        """GET /concert_cancellation_markets/concerts/search."""
+        self._require_auth()
+        return await self.get(
+            "/concert_cancellation_markets/concerts/search", params=params
+        )
+
+    async def list_incentive_programs(
+        self, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /incentive_programs."""
+        return await self.get("/incentive_programs", params=params)
+
+    async def get_incentive_schedules(self) -> Any:
+        """GET /incentive_schedules."""
+        return await self.get("/incentive_schedules")
+
+    async def get_fcm_fills(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /fcm/fills. FCM members only."""
+        self._require_auth()
+        return await self.get("/fcm/fills", params=params)
+
+    async def get_fcm_orders(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /fcm/orders. FCM members only."""
+        self._require_auth()
+        return await self.get("/fcm/orders", params=params)
+
+    async def list_fcm_subtraders(self) -> Any:
+        """GET /fcm/subtraders. FCM members only."""
+        self._require_auth()
+        return await self.get("/fcm/subtraders")
+
+    async def get_fcm_event_contract_daily_cap(
+        self, params: dict[str, Any] | None = None
+    ) -> Any:
+        """GET /fcm/subtraders/event_contract_daily_cap. FCM members only."""
+        self._require_auth()
+        return await self.get("/fcm/subtraders/event_contract_daily_cap", params=params)
+
+    async def get_fcm_subtrader_blocked_categories(self, subtrader_id: str) -> Any:
+        """GET /fcm/subtraders/blocked_categories. FCM members only."""
+        self._require_auth()
+        return await self.get(
+            "/fcm/subtraders/blocked_categories",
+            params={"subtrader_id": subtrader_id},
+        )
+
+    async def get_target_balance_allocation(self) -> Any:
+        """GET /portfolio/target_balance_allocation."""
+        self._require_auth()
+        return await self.get("/portfolio/target_balance_allocation")
+
+    async def get_fcm_positions(self, params: dict[str, Any] | None = None) -> Any:
+        """GET /fcm/positions. FCM members only."""
+        self._require_auth()
+        return await self.get("/fcm/positions", params=params)
