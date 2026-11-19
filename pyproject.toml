@@ -8,7 +8,7 @@ license = {text = "MIT"}
 
 dependencies = [
     "mcp>=2.3.0",
-    "fastmcp>=4.2.0",
+    "fastmcp>=4.2.1",
     # certifi floor from FastMCP's October 2026 certificate authority incident notice
     # (https://github.com/PrefectHQ/fastmcp/blob/main/SECURITY.md#certificate-authority-incident-october-2026),
     # raised to 2026.10.23, which drops emSign Root CA - C1 and emSign ECC Root CA - C3
@@ -25,10 +25,10 @@ dependencies = [
 [project.optional-dependencies]
 # Code Mode is optional: FastMCP ships its pydantic-monty sandbox as the code-mode extra.
 code-mode = [
-    "fastmcp[code-mode]>=4.2.0",
+    "fastmcp[code-mode]>=4.2.1",
 ]
 dev = [
-    "fastmcp[code-mode]>=4.2.0",
+    "fastmcp[code-mode]>=4.2.1",
     "black>=26.5.1",
     "ruff",
     "mypy",

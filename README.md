@@ -12,7 +12,7 @@ This repository is Christian Claudio's fork of [`9crusher/mcp-server-kalshi`](ht
 graph TD
     Client["AI Agent (Claude / Cortex / Antigravity / Cursor)"] -->|"MCP Stdio / Streamable HTTP"| Server["mcp-server-kalshi"]
     Server --> Config["KalshiSettings & Safety Gates"]
-    Config -->|"KALSHI_READONLY=1 or profile=readonly"| RO["Read-Only Gate (52 tools)"]
+    Config -->|"KALSHI_READONLY=1 or profile=readonly"| RO["Read-Only Gate (94 tools)"]
     Config -->|"confirm=True"| Mutating["Order Execution Gate (7 tools)"]
     Config -->|"Default: demo"| EnvSelect{"Environment Router"}
     EnvSelect -->|"demo"| DemoAPI["Kalshi Demo API (demo-api.kalshi.co)"]
@@ -23,16 +23,21 @@ graph TD
 
 ---
 
-## 🚀 Highlights (59 Tools)
+## 🚀 Highlights (101 Tools)
 
 - **Discovery & Search** — `list_markets`, `get_market`, `list_events`, `get_event`, `list_series`, `get_series`, `get_tags_by_categories`, `get_sports_filters`.
-- **Research & Live Feeds** — `get_market_orderbook`, `get_market_candlesticks`, `batch_get_market_candlesticks`, `get_market_trades`, `get_event_live_data`, `get_live_data_batch`, `get_milestones`, `get_milestone`.
+- **Research & Live Feeds** — `get_market_orderbook`, `get_market_orderbooks`, `get_market_candlesticks`, `batch_get_market_candlesticks`, `get_event_candlesticks`, `get_market_trades`, `get_event_live_data`, `get_live_data_batch`, `get_live_data_by_milestone`, `get_live_data` (legacy typed path), `get_game_stats`, `get_weather_index`, `get_weather_index_calibrations`, `get_milestones`, `get_milestone`.
+- **Event & Series Metadata** — `get_event_metadata`, `get_series_fee_changes`, `get_event_fee_changes`, `list_multivariate_events`, `get_event_forecast_percentile_history` (authenticated).
+- **Structured Targets & Incentives** — `list_structured_targets`, `get_structured_target`, `list_incentive_programs`, `get_incentive_schedules`.
+- **On-Request Markets** — `get_weather_point_availability`; `get_concert_cancellation_availability`, `list_concerts`, and `search_concerts` (the concert list and search are authenticated).
 - **Deep Contract Rules** — `get_market_rules` consolidates `rules_primary`/`rules_secondary`, early-close conditions, settlement sources, and series prohibitions; `fetch_rules_pdf` downloads and extracts the exact legal contract terms text.
 - **Multivariate & Parlays** — `list_multivariate_collections`, `get_multivariate_collection`.
 - **Exchange & Status** — `get_exchange_status`, `get_exchange_schedule`, `get_environment`.
 - **Historical archive** — `get_historical_cutoff`, historical markets/candlesticks/trades/fills/orders/positions.
 - **RFQ batches** — `list_rfq_batches`, `get_rfq_batch`, `get_rfq_batch_best_quotes`, `get_rfq_batch_quotes` (authenticated communications reads). Kalshi lists these endpoints in its OpenAPI spec but hides them from the published docs until RFQ batches launch.
-- **Portfolio & Exposure** — `get_balance`, `get_total_resting_order_value` (FCM members only; regular accounts get 403), `get_positions`, `get_fills`, `get_settlements`, `list_deposits`, `list_withdrawals`, subaccount balance/transfer/netting reads, queue positions, and account limits/endpoint costs.
+- **Communications** — `get_communications_id`, `list_rfqs`, `get_rfq`, `get_rfq_quote`, `list_quotes`, `get_quote` (deprecated; use `get_rfq_quote`), `list_block_trade_proposals`. `list_quotes`'s `rfq_creator_subtrader_id` filter is FCM members only.
+- **Portfolio & Exposure** — `get_balance`, `get_total_resting_order_value` (FCM members only; regular accounts get 403), `get_positions`, `get_fills`, `get_settlements`, `list_deposits`, `list_withdrawals`, `get_credit_history`, `get_order_group`, intra-exchange transfer reads, `get_target_balance_allocation`, `list_api_keys` (`fcm_subtrader_id` is FCM members only), subaccount balance/transfer/netting reads, queue positions, account limits/endpoint costs, and `get_account_api_usage_level_volume_progress`. `get_event_contract_exit_triggers` is hidden from the published docs until take-profit / stop-loss launches. `get_exchange_user_data_timestamp` reports when balance, order, fill, and position reads were last validated.
+- **FCM Members Only** — `get_fcm_fills`, `get_fcm_orders`, `get_fcm_positions`, `list_fcm_subtraders`, `get_fcm_event_contract_daily_cap`, `get_fcm_subtrader_blocked_categories`. Direct member accounts are not these endpoints. An API key bound to one subtrader may omit `subtrader_id` where the spec says so.
 - **Trading & Execution** — `create_order`, `cancel_order`, `amend_order`, `decrease_order`, `batch_create_orders`, `batch_cancel_orders`, `list_orders`, `get_order`.
 - **Risk Management & Order Groups** — `list_order_groups`, `cancel_order_group` (groups that cancel their orders when a rolling 15-second contracts limit is hit). `list_order_groups` keeps its `limit` and `cursor` inputs for compatibility, though Kalshi's OpenAPI spec (v3.34.0) documents only `subaccount` on that endpoint.
 
@@ -42,7 +47,7 @@ graph TD
 
 - **Sandbox Default:** The server targets Kalshi's **demo (sandbox)** environment unless `KALSHI_ENV=prod` is explicitly set.
 - **Simulation Preview Gating:** Mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) require `confirm=true`. Without it, they return a structured simulation **preview** and send nothing.
-- **Read-Only Mode:** `KALSHI_READONLY=1` hides every tool whose `readOnlyHint` is not true and `ToolRegistry.get_handler` refuses a write. `KALSHI_MCP_PROFILE=readonly` (or `--profile readonly`) does the same with a `ReadOnlyToolFilter` and does not depend on `KALSHI_READONLY`. The default profile `full` still exposes all 59 tools.
+- **Read-Only Mode:** `KALSHI_READONLY=1` hides every tool whose `readOnlyHint` is not true and `ToolRegistry.get_handler` refuses a write. `KALSHI_MCP_PROFILE=readonly` (or `--profile readonly`) does the same with a `ReadOnlyToolFilter` and does not depend on `KALSHI_READONLY`. The default profile `full` still exposes all 101 tools.
 - **Tool Search and Code Mode (opt-in, full profile only):** `KALSHI_MCP_ENABLE_TOOL_SEARCH` / `--enable-tool-search` replaces `tools/list` with `search_tools` and `call_tool` (`KALSHI_MCP_TOOL_SEARCH_BACKEND` `regex` or `bm25`). `KALSHI_MCP_ENABLE_CODE_MODE` / `--enable-code-mode` replaces it with `search`, `get_schema`, and `execute` (install the `code-mode` extra). They are mutually exclusive and are not attached on `readonly`. With `KALSHI_READONLY=1`, `search_tools` / `search` / `get_schema` stay listed because they are read-only, and `call_tool` / `execute` stay listed so a client can still invoke read-only tools. `search_tools` never returns a write tool in that mode. A write tool reached through `call_tool`, `execute`, or a direct call is still refused by `ToolRegistry.get_handler`.
 - **Secret Scrubbing:** Private keys (PEM), API keys, request signatures, and Bearer tokens are scrubbed from error logs via `redact_secrets()`.
 - **Intuitive Order Pricing:** Exposes intuitive whole **cents** limit pricing and automatically translates buy-NO ⇄ sell-YES orderbook math.
@@ -58,7 +63,7 @@ graph TD
 | `KALSHI_PRIVATE_KEY_PATH` | _(none)_ | Path to your RSA or Ed25519 private key `.pem`. Set this or `KALSHI_PRIVATE_KEY`, not both. |
 | `KALSHI_PRIVATE_KEY` | _(none)_ | PEM text of that same key, instead of a file. See below. |
 | `KALSHI_READONLY` | `0` / `false` | When enabled (`1`), hides non-read-only tools and refuses them in the handler, including a write reached through Tool Search or Code Mode. |
-| `KALSHI_MCP_PROFILE` | `full` | `full` (all 59 tools) or `readonly` (readOnlyHint tools only). `--profile` overrides. |
+| `KALSHI_MCP_PROFILE` | `full` | `full` (all 101 tools) or `readonly` (readOnlyHint tools only). `--profile` overrides. |
 | `KALSHI_MCP_ENABLE_TOOL_SEARCH` | `0` / `false` | On `full` only, replace `tools/list` with `search_tools` + `call_tool`. |
 | `KALSHI_MCP_TOOL_SEARCH_BACKEND` | `regex` | `regex` or `bm25`. |
 | `KALSHI_MCP_ENABLE_CODE_MODE` | `0` / `false` | On `full` only, replace `tools/list` with `search`, `get_schema`, and `execute`. Needs the `code-mode` extra. Mutually exclusive with Tool Search. |
