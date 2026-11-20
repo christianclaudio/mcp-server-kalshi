@@ -1,117 +1,71 @@
----
-vcs:
-  system: github
-  remote: https://github.com/christianclaudio/mcp-server-kalshi
-  owner: christianclaudio
-  repo: mcp-server-kalshi
-  default_branch: main
-  branch_policy: pr_only
-  merge_method: squash
-  delete_branch_on_merge: true
----
-
 # AGENTS.md
 
-Instructions for AI coding agents (Antigravity, Claude Code, Copilot, Cursor, Windsurf) working on this repository or integrating Kalshi prediction market capabilities.
+Instructions for AI coding agents working on `mcp-server-kalshi` or integrating Kalshi prediction market capabilities.
 
 ---
 
 ## 🎯 Project Overview & Fork Purpose
 
-This is `mcp-server-kalshi` — an enterprise Model Context Protocol (MCP) server exposing the [Kalshi](https://kalshi.com) prediction-market Trade API v2 as MCP tools.
+`mcp-server-kalshi` is an enterprise-hardened fork of `9crusher/mcp-server-kalshi` exposing the [Kalshi](https://kalshi.com) Trade API v2 as MCP tools (Python 3.11+, `uv >= 0.13.4`, `fastmcp>=4.2.1`, `mcp>=2.3.0`, Spec 2026-07-28, `httpx`, `pydantic` v2, `cryptography` RSA-PSS/Ed25519).
 
-**Lineage & Purpose**:
-- **Upstream Origin**: Maintained by christianclaudio as an enterprise-hardened fork of `9crusher/mcp-server-kalshi`.
-- **Primary Function**: Built for deep end-to-end trading workflows (market discovery → candidate research → legal settlement rules extraction → order simulation/placement).
-- **Core Stack**: Python 3.11+, `uv` (0.13.4 or later), `fastmcp>=4.2.1` + `mcp>=2.3.0` (FastMCP 4 engine, lifespan management, host & origin protection, Spec 2026-07-28), `httpx` (async connection pooling & retry engine), `pydantic` v2, and `cryptography` (RSA-PSS and Ed25519 signing).
-- **Distribution**: Install from git or `ghcr.io/christianclaudio/mcp-server-kalshi`. This fork does not publish to public PyPI or the MCP Registry. Upstream owns the public package name `mcp-server-kalshi` and registry id `io.github.9crusher/mcp-server-kalshi`.
+- **Distribution (NO public PyPI / MCP Registry publish):** install from git or `ghcr.io/christianclaudio/mcp-server-kalshi`. Upstream owns `mcp-server-kalshi` on PyPI and `io.github.9crusher/mcp-server-kalshi` in the MCP Registry — never publish this fork there.
 
 ---
 
 ## 🏗️ Architecture Blueprint
 
-Data flows: request → Pydantic schema validation → API client → FastMCP 4 / low-level MCP server.
+Data flow: request → Pydantic schema validation → API client → FastMCP 4 / low-level MCP server (`list_tools`, `call_tool`).
 
-Key paths:
-- `src/mcp_server_kalshi/server.py` — `ToolRegistry`, every tool handler, FastMCP 4 engine, lifespan, streamable HTTP bridge.
-- `src/mcp_server_kalshi/kalshi_client/` — `base.py` (async httpx `BaseAPIClient`, `KalshiAuth` RSA-PSS/Ed25519 signing, `KalshiAPIError`), `client.py` (`KalshiAPIClient` endpoints + `build_*_order_payload` translators), `schemas.py` (Pydantic request models), `pdf.py` (contract-terms PDF text).
-- `src/mcp_server_kalshi/profiles.py` — `full` (default, all 101 tools) and `readonly` (`ReadOnlyToolFilter`). No domain namespaces and no job allowlists. Tool Search (`KALSHI_MCP_ENABLE_TOOL_SEARCH`, backend `regex` or `bm25`) and Code Mode (`KALSHI_MCP_ENABLE_CODE_MODE`, the `code-mode` extra) attach on `full` only and are mutually exclusive. `KALSHI_READONLY=1` still hides non-`readOnlyHint` tools on top of those transforms: `search_tools`, `search`, and `get_schema` stay listed (they are annotated read-only), and `call_tool` / `execute` stay listed so read-only tools remain callable. `search_tools` does not return write tools in that mode. A write tool reached through `call_tool`, `execute`, or a direct call is refused by `ToolRegistry.get_handler`.
-- `src/mcp_server_kalshi/config.py` — Pydantic Settings; safety default `KALSHI_ENV=demo`. Profile and discovery flags: `KALSHI_MCP_PROFILE` (default `full`), `KALSHI_MCP_ENABLE_TOOL_SEARCH`, `KALSHI_MCP_TOOL_SEARCH_BACKEND`, `KALSHI_MCP_ENABLE_CODE_MODE`. `ssrf.py` — allowlist and private-range checks for API base, PDF, and OpenAPI spec URLs (the drift script fetches only `https://docs.kalshi.com` after a DNS check); `SSRFSafeAsyncTransport` connects only to an address that passed that check, trying the next checked address if a connect fails while the request's connect timeout lasts (one deadline shared by all the addresses, not a fresh timeout for each), and keeps the hostname for the Host header, TLS SNI, certificate verification and per-hostname connection pooling. The API client honors environment proxies as it did before the pin: when `HTTP(S)_PROXY` / `ALL_PROXY` applies to the base URL after `NO_PROXY` (`ssrf.environment_proxy_for`, the same resolution httpx uses on the public `urllib.request.getproxies()`), it uses httpx's own proxied transport. Pinning doesn't apply through a proxy, because the proxy resolves the name; the hostname check still runs first. Otherwise it uses the pinned transport. The PDF fetch and the drift fetch always connect directly through the pin and never use an environment proxy: they pass the transport (httpx then ignores env proxies: `allow_env_proxies = trust_env and transport is None`) and set `trust_env=False`. `auth.py` — `KALSHI_MCP_AUTH_TOKEN` bearer verifier (`SharedTokenVerifier`, attached when `server.py` builds `mcp`) and the strict `KALSHI_MCP_ALLOW_UNAUTHENTICATED_BIND` opt-in; `main()` refuses a tokenless HTTP bind to a non-localhost host with exit code 2.
-- `scripts/check_tool_contract.py` — source of truth for the expected tool set and annotations. Do not hard-code tool counts elsewhere.
-- `scripts/check_openapi_drift.py`, `scripts/check_conformance.sh` + `conformance-baseline.yml`.
-- `scripts/release_notes.py` — release body from squash commits since the previous `v*` tag. `scripts/check_version.py` — runs after the build and reads the version from the single wheel in `dist/` (the file that ships, as release.yml's tag check does); fails on `0.0.0` (no git metadata) or `0.0.1.devN` (no reachable tag, a shallow checkout).
-- `tests/` — unit tests are offline; live network tests live in `tests/test_live.py` (marked `pytest.mark.live`, deselected by the default pytest `addopts` `-m 'not live'` and in CI; run via `-m live`). Public live tools stay ungated. Authenticated live items (`@pytest.mark.live(authenticated=True)`) skip unless `KALSHI_API_KEY_ID` (or `KALSHI_API_KEY`) and one of `KALSHI_PRIVATE_KEY_PATH` or `KALSHI_PRIVATE_KEY` is set; the skip reason lists missing names only. Signing format in `tests/test_auth.py`, order translation and confirm gate in `tests/test_orders.py`. Version and release-tooling tests are `tests/test_version.py`, `tests/test_release_notes.py`, and `tests/test_check_version.py`. `tests/test_otel_spans.py` records a failing tool's OpenTelemetry spans with an in-memory exporter (per-test SDK provider, global restored) and asserts no secret appears. `tests/conftest.py` clears the HTTP auth env vars and the module-level server's `auth` before every test. `TESTING.md` covers test conventions.
-- `.github/workflows/` — `ci.yml`, `release.yml` (on a `v*` tag: build with full history, check the wheel version matches the tag, build the release notes, create the GitHub Release from `scripts/release_notes.py` with the wheel, sdist, and SBOM attached, then push the GHCR image only after that job succeeds, then a separate `attest` job with only `contents: read`, `id-token: write` and `attestations: write` attests `dist/*` and the pushed image digest; PyPI and MCP Registry publishing stay commented out, and the registry job needs `attest` if ever enabled), `dependabot-automerge.yml` (waits for the CI run on the PR head, then squash-merges that commit with `gh pr merge --squash --match-head-commit`, only when the highest update is semver-minor or semver-patch; docker updates and major updates wait for a human review). `scripts/setup_repo_governance.sh` names the required checks (Lint and types, Tests, Tool contract assertions, Protocol conformance, Build and package check, Container image build); it is edited by hand and not run from CI.
-- `server.json` (fork catalog metadata, not published to the registry; commits version `0.0.0` and one OCI package, the GHCR image, whose tag lives in `identifier`), `Dockerfile` (the runtime image carries `LABEL io.modelcontextprotocol.server.name`, equal to the `server.json` `name`), `fastmcp.json`, `pyproject.toml` (hatchling + uv-dynamic-versioning; console script `mcp-server-kalshi`).
-
-Tool registration uses an explicit registry pattern: `@ToolRegistry.register_tool(name=..., description=..., input_schema=..., read_only=..., destructive=..., idempotent=..., open_world=...)`. Every tool sets all four hints; `scripts/check_tool_contract.py` asserts them. The server decorates low-level MCP handlers (`list_tools`, `call_tool`) serving the collected registry.
+- `src/mcp_server_kalshi/server.py` — `ToolRegistry` (`@ToolRegistry.register_tool(name=..., description=..., input_schema=..., read_only=..., destructive=..., idempotent=..., open_world=...)` with all 4 hints explicit), tool handlers, FastMCP 4 engine, lifespan, Streamable HTTP bridge.
+- `src/mcp_server_kalshi/kalshi_client/` — `base.py` (`BaseAPIClient`, `KalshiAuth` RSA-PSS/Ed25519 signing, `KalshiAPIError`), `client.py` (`KalshiAPIClient` + `build_*_order_payload` translators), `schemas.py` (`MCPSchemaBaseModel`, `_Paginated`), `pdf.py` (contract-terms PDF text).
+- `src/mcp_server_kalshi/profiles.py` — `full` (default, 101 tools) and `readonly` (`ReadOnlyToolFilter`) only; no domain namespaces or job allowlists. Tool Search (`KALSHI_MCP_ENABLE_TOOL_SEARCH`, `regex`/`bm25`) and Code Mode (`KALSHI_MCP_ENABLE_CODE_MODE`, `code-mode` extra) attach on `full` only and are mutually exclusive. With `KALSHI_READONLY=1`, `search_tools`/`search`/`get_schema` stay listed (annotated read-only), `call_tool`/`execute` stay callable for read-only tools, and `ToolRegistry.get_handler` refuses any write tool.
+- `src/mcp_server_kalshi/config.py` — Pydantic Settings; safety default `KALSHI_ENV=demo` + `KALSHI_MCP_PROFILE` / discovery flags.
+- `src/mcp_server_kalshi/ssrf.py` — allowlist and private-range checks for API base, PDF, and OpenAPI spec URLs (`check_openapi_drift.py` fetches only `https://docs.kalshi.com` after DNS check). **`SSRFSafeAsyncTransport`** connects only to a checked address, trying the next while the request's connect timeout lasts (one deadline shared by all addresses), and keeps the hostname for the Host header, TLS SNI, certificate verification, and per-hostname pooling; **proxy exception:** the API client honors `HTTP(S)_PROXY`/`ALL_PROXY` via `ssrf.environment_proxy_for` (running hostname checks first, then httpx's proxied transport), while PDF and drift fetches always connect directly pinned (`trust_env=False`).
+- `src/mcp_server_kalshi/auth.py` — `KALSHI_MCP_AUTH_TOKEN` bearer verifier (`SharedTokenVerifier`, attached in `server.py`) and `KALSHI_MCP_ALLOW_UNAUTHENTICATED_BIND` opt-in; `main()` exits 2 on tokenless non-localhost HTTP bind.
+- `scripts/check_tool_contract.py` — source of truth (`EXPECTED_ANNOTATIONS`, expected count; never hard-code elsewhere).
+- `scripts/check_openapi_drift.py`, `scripts/check_conformance.sh` + `conformance-baseline.yml`, `scripts/release_notes.py`, `scripts/check_version.py`, `scripts/setup_repo_governance.sh` (required checks list; edit only, never run from CI).
+- `tests/` — 100% offline suite (`addopts` uses `-m 'not live'`). Live checks (`tests/test_live.py`, `-m live`): public tools ungated; `@pytest.mark.live(authenticated=True)` skips unless `KALSHI_API_KEY_ID`/`KALSHI_API_KEY` and `KALSHI_PRIVATE_KEY_PATH`/`KALSHI_PRIVATE_KEY` are set. Key modules: `test_auth.py`, `test_orders.py`, `test_otel_spans.py`, `test_version.py`, `test_release_notes.py`, `test_check_version.py`; `tests/conftest.py` clears HTTP auth env & cached auth (`TESTING.md` documents conventions).
+- `.github/workflows/` — `ci.yml`, `release.yml`, `dependabot-automerge.yml` (no `deploy.yml`).
+- `server.json` (fork metadata only, commits `0.0.0`, one OCI GHCR package in `identifier`), `Dockerfile` (`LABEL io.modelcontextprotocol.server.name` matching `server.json` `name`), `fastmcp.json`, `pyproject.toml`.
 
 ---
 
-## ⚡ The Canonical Workflow: Building Tools from API / llm.txt
+## ⚡ Canonical Workflow: Building Tools from API / `llms.txt`
 
-When translating an API endpoint or Kalshi documentation into an MCP tool, follow these 4 steps in exact order:
-
-### 1. Pydantic Request Schema (`kalshi_client/schemas.py`)
-- Add a request model extending `MCPSchemaBaseModel` (or `_Paginated` if endpoint paginates).
-- Every field must use `Field(...)` with a clear description and accurate optionality (`X | None = Field(default=None, ...)`).
-- Use `Literal[...]` for enums. Field docs become parameter documentation in the generated MCP `inputSchema`.
-
-### 2. Client Method (`kalshi_client/client.py`)
-- Add an `async def` method on `KalshiAPIClient` calling `await self.get/post/delete(path, params=/json=)`.
-- URL path parameters **must** be safely formatted.
-- Add `self._require_auth()` as the first line for any portfolio or order endpoint.
-
-### 3. Tool Handler & Registration (`server.py`)
-- Register the handler using `@ToolRegistry.register_tool(name=..., description=..., input_schema=..., read_only=..., destructive=..., idempotent=..., open_world=...)`. `idempotent` and `open_world` default to `None`, so pass them explicitly.
-- Validate arguments with `Model(**request)` (or `_params(request, Model)` for query GETs) and call the client.
-- Set `read_only=False, destructive=True` for anything that places, amends, or cancels orders.
-
-### 4. Pure Offline Testing & Contract Sync (`tests/`)
-- Add unit tests in `tests/` mocking responses via `httpx.MockTransport`.
-- **Zero live network calls during tests.** Keep tests 100% offline.
-- Add the new tool to `EXPECTED_ANNOTATIONS` in `scripts/check_tool_contract.py` (the expected count comes from it), then run `uv run python scripts/check_tool_contract.py`.
-- Ensure test coverage remains at **100.0%**.
+Follow in exact order:
+1. **Pydantic request schema (`kalshi_client/schemas.py`):** extend `MCPSchemaBaseModel` (or `_Paginated`), document every field with `Field(...)` and accurate optionality (`X | None = Field(default=None, ...)`), use `Literal[...]` for enums.
+2. **Client method (`kalshi_client/client.py`):** add `async def` on `KalshiAPIClient` calling `await self.get/post/delete(...)` with escaped URL path params; place `self._require_auth()` as first line on any portfolio or order endpoint.
+3. **Tool handler & registration (`server.py`):** register via `@ToolRegistry.register_tool(...)` passing `idempotent` and `open_world` explicitly (both default `None`), validate with `Model(**request)` (or `_params(request, Model)`), and set `read_only=False, destructive=True` on anything placing, amending, or canceling orders.
+4. **Offline tests & contract sync (`tests/`):** mock HTTP with `httpx.MockTransport` (**zero live network calls**), add tool to `EXPECTED_ANNOTATIONS` in `scripts/check_tool_contract.py`, and keep **100.0%** coverage.
 
 ---
 
 ## 🛡️ Non-Negotiable Safety & Security Rules
 
-1. **Cents ↔ YES-Leg Model**:
-   - Tools expose intuitive `action` (buy/sell) + `side` (yes/no) + whole-**cents** `limit_price`.
-   - Kalshi V2 quotes everything from the YES leg as `bid`/`ask` in fixed-point dollars.
-   - `build_create_order_payload` and `build_amend_order_payload` perform this translation, including the inversion:
-     $$\text{buy-NO @ } p \equiv \text{sell-YES @ } (100 - p)$$
-   - Never reimplement this inline — always reuse the central builders.
-2. **Mandatory `confirm=true` Gate**:
-   - Mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) return a *preview* (human summary + exact payload) and send **nothing** unless `confirm=True`.
-3. **Demo by Default**:
-   - `KALSHI_ENV` defaults to `demo` (sandbox). Real money (`prod`) requires explicit opt-in. Every order response includes `settings.env_label`.
-4. **Request Signing (RSA-PSS and Ed25519)**:
-   - `KalshiAuth` signs `timestamp_ms + METHOD + path`, where `path` includes `/trade-api/v2` but **strictly excludes the query string**.
-   - The key type comes from the parsed key object, not the PEM banner. Ed25519 signs that message directly (RFC 8032) and the signature is base64. RSA stays RSA-PSS with SHA-256, MGF1-SHA256, and a salt length equal to the digest length, then base64. Never alter the signed payload format without updating `tests/test_auth.py`.
-5. **Public vs. Authenticated Separation**:
-   - Market discovery, legal rules, and candidate search work without credentials. Portfolio/order endpoints call `self._require_auth()` and fail-closed when keys are absent.
-6. **Secret Redaction**:
-   - Credentials, private keys, and session tokens must never appear in logs or error traces.
-   - `errors.py` follows the template v1.6.0 house rules: a credential value is masked whole (quoted to its closing quote, unquoted to the end of the line, `{...}`/`[...]`/`(...)` to its balanced bracket after a credential or token key, quoted or not, as in a Python `repr` such as `{'api_key': ['x']}` or `{'api_key': ('a', 'x')}`, with brackets inside double- or single-quoted strings skipped; a bare number, `True` or word under a quoted key is masked, `None`/`null` stays, and `next_token`/`page_token`/`max_tokens` are untouched), and any non-None value under a credential key is masked whatever its type. Every tool error path (`KalshiFastMCPTool.run` for FastMCP/HTTP and `handle_call_tool` for stdio) returns `isError: true` with `redact_message(str(exc))`, which redacts JSON inside the message value by value so it keeps its shape. Kalshi extras (signing headers, any-length `Bearer`) stay on top and fail closed. PEM blocks run from `-----BEGIN <label>-----` to the `-----END <label>-----` with the same label (any case; an END with another label does not end it), a single-quoted value that contains a newline is masked only to the end of its line (a known limit), and a `-----BEGIN` with no matching END is masked to the end of the text. A `{...}`/`[...]` value after a credential key is masked to its balanced bracket (or the end of the line), with bracket scans cached so many unbalanced values cost one pass. In `redact_message`, a tuple is masked whole when a credential key sits in the 256 characters before its `(`, and a `(` never counts toward the cap; once 64 brackets have failed to parse (abusive input), the rest of the message is masked. A flood of `(` right after `:` or `=` costs about 25 times more per byte than plain text, because each one checks the 256 characters before it for a key; it stays linear and nothing leaks, but hundreds of KB of it take seconds (a known limit). A value on the line after `password=` (or any credential key) is not masked (a known limit).
-7. **Registry Metadata Constraint**:
-   - In `server.json`, the root `description` must be **strictly $\le$ 100 characters** to pass MCP Registry validation (longer strings trigger HTTP 422).
-8. **Git Safety & Releases**:
-   - Never commit private keys or API credentials. All changes proceed via feature branches and PRs.
-   - **The git tag is the version.** `uv-dynamic-versioning` reads the `vX.Y.Z` tag at build time; `pyproject.toml` declares `dynamic = ["version"]`, `__version__` comes from `importlib.metadata` (in `src/mcp_server_kalshi/__init__.py`, reused by `server.py`), and `server.json` commits `0.0.0` (the version and the image tag in `identifier`). PRs never edit a version: no bump in `pyproject.toml`, `src/mcp_server_kalshi/__init__.py`, `server.json`, `uv.lock`, or `CHANGELOG.md`. Untagged builds report `X.Y.(Z+1).devN+<sha>`; a build with no git metadata reports the fallback `0.0.0`, which `scripts/check_version.py` rejects when run on the built wheel after the build.
-   - **Breaking changes:** every `feat!` / `fix!` PR (any `type!:` title) carries a `BREAKING CHANGE:` footer as the final paragraph of the PR body, and the footer text must include the migration steps. `BREAKING CHANGE:` (or its synonym `BREAKING-CHANGE:`) is the only footer token; do not add a separate migration token. `scripts/release_notes.py` stops at the CodeRabbit marker line (outside a code fence) `<!-- This is an auto-generated comment: release notes by coderabbit.ai -->` and ignores everything after it, so the footer goes before CodeRabbit's generated summary, never inside it.
-   - **Squash merges use the PR body as the commit message** (repo settings: PR title as squash title, PR body as squash message). Keep the PR body accurate up to the merge, because `scripts/release_notes.py` reads it from the squash commit.
-   - **`CHANGELOG.md` is frozen** as of 0.2.7. GitHub Releases are the changelog: `scripts/release_notes.py` builds each release body from the squash commits since the previous tag (every `BREAKING CHANGE:` footer verbatim, then the commit subjects). Do not add CHANGELOG entries.
-   - **README is outside the release version ceremony.** Do not add or chase `README.md` `==X.Y.Z` install pins. Update `README.md` only when project behavior, install method, config, or commands actually change. Prefer unpinned install examples (`uvx --from git+https://github.com/christianclaudio/mcp-server-kalshi mcp-server-kalshi`, the GHCR image `:latest`) or point readers to GitHub Releases.
+1. **Cents ↔ YES-Leg Model:** tools expose `action` (`buy`/`sell`) + `side` (`yes`/`no`) + whole-cents `limit_price`; Kalshi v2 quotes YES-leg `bid`/`ask` in fixed-point dollars. Always reuse `build_create_order_payload` and `build_amend_order_payload` (`buy-NO @ p ≡ sell-YES @ (100 - p)`), never reimplement inline.
+2. **Mandatory `confirm=True` Gate:** all 7 mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) return a preview without sending anything unless `confirm=True`.
+3. **Demo by Default:** `KALSHI_ENV` defaults to `demo` (`prod` requires explicit opt-in); order responses include `settings.env_label`.
+4. **Request Signing (RSA-PSS & Ed25519):** `KalshiAuth` signs `timestamp_ms + METHOD + path` (including `/trade-api/v2`, **strictly excluding query string**). Key type comes from the parsed key object, not PEM banner (Ed25519 RFC 8032; RSA-PSS SHA-256 / MGF1-SHA256 / salt len = digest len). Never alter signing format without updating `tests/test_auth.py`.
+5. **Public vs. Authenticated Separation:** market discovery, legal rules, and candidate search work unauthenticated; portfolio/order endpoints fail closed via `self._require_auth()`.
+6. **Secret Redaction:** `errors.py` follows template v1.6.0 rules (masks credentials/keys/tokens/PEM blocks with `[REDACTED]`, preserves `next_token`/`page_token`/`max_tokens`, adds Kalshi signing headers & any-length `Bearer` fail-closed). `KalshiFastMCPTool.run` (HTTP) and `handle_call_tool` (stdio) return `isError: true` with `redact_message(str(exc))` keeping JSON shape (see `errors.py` for known multiline/bracket limits).
+7. **Multi-Stage Non-Root Containers (`Dockerfile`):**
+   - Multi-stage `python:3.12-slim-trixie AS builder` → runtime pinned by digest (both stages share the same pin; glibc is keyed by the Debian release in the tag, not the digest), non-root `USER mcp`, `LABEL io.modelcontextprotocol.server.name` matching `server.json` `name`.
+   - Trust-store floor (FastMCP Oct 2026 notice): both stages upgrade OS `ca-certificates` and fail below `20250419+deb13u1` (`ARG CA_CERTIFICATES_FLOOR`, before pip runs in builder), builder bootstraps pip from `docker/pip-bootstrap.txt` (`--require-hashes`; Dependabot bumps it), `release.yml` upgrades to `pip>=26.2.2`, and `certifi>=2026.10.23` is a direct dependency. Never lower `CA_CERTIFICATES_FLOOR` via `--build-arg` (the build-arg exists only so CI can raise it for the negative floor check; CI and the release workflow never pass it otherwise).
+   - Reproducible lock install: builder installs uv (`docker/uv-bootstrap.txt`, `--require-hashes`, outside venv; Dependabot bumps it), exports `uv export --locked --no-dev --no-emit-project --format requirements.txt` and installs that file with pip in hash-checking mode, then installs `docker/build-backend.txt` (`--require-hashes --only-binary=:all:` outside venv), and runs `PYTHONPATH=/tmp/build-backend pip install --no-deps --no-build-isolation .` (never `pip install .`). Regenerate `docker/build-backend.txt` after `uv lock` via `uv run python scripts/gen_build_backend.py` (never hand-edit; Dependabot excludes it). Enforced by `tests/test_dockerfile.py` & `tests/test_build_backend_lock.py`.
+8. **Registry Metadata (`server.json`):** root `description` **≤ 100 chars**.
+9. **Git Safety & Releases:**
+   - Never commit private keys or API credentials; work via feature branches and PRs.
+   - **Tag is version (`uv-dynamic-versioning`):** `pyproject.toml` declares `dynamic = ["version"]`, `__version__` uses `importlib.metadata` (`src/mcp_server_kalshi/__init__.py`), `server.json` commits `0.0.0`. Never bump versions in PRs (`pyproject.toml`, `__init__.py`, `server.json`, `uv.lock`, `CHANGELOG.md`). Untagged builds report `X.Y.(Z+1).devN+<sha>`; `scripts/check_version.py` rejects `0.0.0` / `0.0.1.devN`.
+   - **Breaking changes (`feat!` / `fix!`):** carry `BREAKING CHANGE:` as the final PR body paragraph (before `<!-- This is an auto-generated comment: release notes by coderabbit.ai -->` if present) and **must include migration steps** (`scripts/release_notes.py` stops at the CodeRabbit marker). Keep PR body accurate before squash merge.
+   - **`CHANGELOG.md` frozen at 0.2.7:** GitHub Releases are the changelog. Keep `README.md` unpinned (`uvx --from git+https://github.com/christianclaudio/mcp-server-kalshi mcp-server-kalshi`, GHCR `:latest`).
+   - **Version level:** before tagging, check the proposed version against the commit types since the last tag (`!` / `BREAKING CHANGE:` → major, `feat` → minor, otherwise patch), and that every breaking commit carries its footer with migration steps.
+   - **Tagging (maintainer go only, no release PR):** preview `git fetch --tags && python3 scripts/release_notes.py` on `main` and post it with the release Ask; verify tag/version unused on git tags, GitHub Releases, and GHCR manifests (get a pull token from `https://ghcr.io/token?scope=repository:christianclaudio/mcp-server-kalshi:pull`, then `GET https://ghcr.io/v2/christianclaudio/mcp-server-kalshi/manifests/X.Y.Z` with `Authorization: Bearer <token>` and an OCI/Docker manifest `Accept` → 404; without the token GHCR returns 401 either way). In a throwaway clone, tag the release commit locally, run `rm -rf dist && uv build`, and confirm the wheel is `mcp_server_kalshi-X.Y.Z-py3-none-any.whl` and `scripts/check_version.py` passes; discard the clone without pushing. On post-release/push failure, merge a fix and tag next patch.
 
 ---
 
 ## 🛠️ Development & Verification Commands
 
-uv 0.13.4 or later is required (`[tool.uv] required-version` in `pyproject.toml`, from FastMCP's [certificate authority incident notice (October 2026)](https://github.com/PrefectHQ/fastmcp/blob/main/SECURITY.md#certificate-authority-incident-october-2026)); older uv refuses to run, and CI's `setup-uv` installs from that setting. The same notice sets the other trust-store floors: `certifi>=2026.10.19` is a direct dependency, both `Dockerfile` stages upgrade the OS `ca-certificates` package and fail the build below Debian trixie's patched `20250419+deb13u1` (`ARG CA_CERTIFICATES_FLOOR`, declared once), the builder does so before any pip runs because pip trusts the OS store as well as its bundled certifi, the builder bootstraps pip from `docker/pip-bootstrap.txt`, and `release.yml` upgrades its build pip to `pip>=26.2.2`. `tests/test_dockerfile.py` and CI's `docker-build` job enforce the order and the floor. The pip bootstrap is hash-pinned in `docker/pip-bootstrap.txt` and installed with `--require-hashes`, so it does not depend on the TLS trust of the base image's older pip and certifi; whoever raises the pip floor updates that pin and its sha256 from PyPI (`https://pypi.org/pypi/pip/<version>/json`, the `py3-none-any` wheel's `digests.sha256`). Dependabot bumps `docker/pip-bootstrap.txt`. Lowering `CA_CERTIFICATES_FLOOR` with `--build-arg` is unsupported; the build-arg exists only so CI's `docker-build` job can raise it for the negative floor check, and CI and the release workflow never pass it otherwise.
-
-Both Dockerfile stages are `python:3.12-slim-trixie AS builder` → runtime, pinned by digest (both stages share the same pin); glibc is keyed by the Debian release in the tag, not the digest. Runtime dependencies install from `uv.lock`, so the image runs the versions CI tests: the builder installs uv from `docker/uv-bootstrap.txt` (hash-pinned, `--require-hashes`, into `/tmp/uv` outside the venv, so the runtime image has no uv), runs `uv export --locked --no-dev --no-emit-project --format requirements.txt` (base dependencies only, a hash for every package, and the build fails if `uv.lock` is stale), installs that file with pip in hash-checking mode, then installs the project build backend from `docker/build-backend.txt` (hash-pinned hatchling, uv-dynamic-versioning, and every transitive build dependency, `--require-hashes --only-binary=:all:`, into `/tmp/build-backend` outside the venv, so the runtime image has no build backend) and the project with `PYTHONPATH=/tmp/build-backend pip install --no-deps --no-build-isolation .`. Never install the project with its dependencies (`pip install .`), which resolves them fresh at build time. Whoever changes `[tool.uv] required-version` keeps the uv pin within it and updates its sha256 values from `https://pypi.org/pypi/uv/<version>/json` (the manylinux x86_64 and aarch64 wheels' `digests.sha256`). Dependabot bumps `docker/uv-bootstrap.txt`. The build-backend pins are the `build-backend` dependency group in `pyproject.toml` (exact versions inside the `[build-system]` ranges, not installed by default), so `uv.lock` carries their closure with hashes. After `uv lock`, `uv run python scripts/gen_build_backend.py` rewrites `docker/build-backend.txt` from `uv.lock` (`--check` reports drift instead), and `tests/test_build_backend_lock.py` fails if the file, the lock or the ranges disagree. The file is generated from `uv.lock` by `scripts/gen_build_backend.py`, must never be edited by hand, and the `uv` Dependabot entry excludes it via `exclude-paths`. `tests/test_dockerfile.py` enforces the install steps and the pins.
+Requires `uv >= 0.13.4` (`[tool.uv] required-version` in `pyproject.toml`).
 
 ```bash
 # Install editable with dev dependencies (matches the locked CI resolve)
@@ -152,21 +106,24 @@ coderabbit review --agent --uncommitted
 
 ## 🔄 CI & Releases
 
-CI is defined in `.github/workflows/ci.yml` (`lint-and-types` "Lint and types": Ruff lint and format, Black, mypy; `test` "Tests (py3.11–py3.14)" at 100% coverage plus the aggregate `tests` "Tests" job, which fails unless every matrix leg succeeded; `tool-contract` "Tool contract assertions"; `openapi-drift` "OpenAPI drift check" as its own job; `build-check` "Build and package check" with `scripts/check_version.py` and `twine check`; `docker-build` "Container image build" (builds the full image without pushing it, checks that the runtime image has the project and none of the build-only packages (runtime dependencies such as `packaging` stay), checks that the image answers `initialize` and `tools/list` over stdio with no network, and checks that the Dockerfile's builder stage fails at its `ca-certificates` floor check, before any pip step, when the floor is above the installed version); `conformance` "Protocol conformance"; and `drift-check` "Check API Drift" (scheduled and manual runs only)) and installs with `uv sync --locked --all-extras`. Jobs that install or build the package check out with `fetch-depth: 0`, because a shallow checkout has no reachable tag and reports `0.0.1.devN`. The Docker build context has no `.git`, so `release.yml` passes the tag version as `UV_DYNAMIC_VERSIONING_BYPASS`. CI runs on pushes to `main` and `feat/*`, on pull requests to `main`, weekly on `main` on Sunday at 15:17 America/New_York (`schedule` with `timezone`, after the Sunday 09:30 America/New_York Dependabot run in `.github/dependabot.yml`), and on manual dispatch (`workflow_dispatch`); the weekly run exists because merges by `dependabot-automerge.yml` use `GITHUB_TOKEN` and so never trigger the `push` run. Run all of these before opening a PR. The `drift-check` job runs only on the weekly schedule and on manual dispatch: it captures the drift check's exit code explicitly, and on a non-zero exit (drift or an error) fails the run and, when the drift scan runs on `main`, opens a `forge-todo` issue (titled as drift only when the check reported drift; otherwise "drift monitor failed"); a failed setup step fails the run without an issue.
+- **CI (`.github/workflows/ci.yml`):** installs with `uv sync --locked --all-extras`; runs on `push` (`main`, `feat/*`), `pull_request` (`main`), weekly schedule, and `workflow_dispatch` (`fetch-depth: 0` on package jobs). Jobs: `lint-and-types`, `test` (Python 3.11–3.14, 100% cov) + `tests`, `tool-contract`, `openapi-drift`, `build-check` (`check_version.py` + `twine check`), `docker-build` (no push; verifies stripped build deps, stdio `initialize`/`tools/list`, negative `CA_CERTIFICATES_FLOOR`), `conformance`, and `drift-check` (schedule/manual only; fails on non-zero exit and opens `forge-todo` issue on `main` drift or monitor failure).
+- **Dependabot (`dependabot-automerge.yml`):** squash-merges minor/patch PRs (`gh pr merge --squash --match-head-commit`) after CI passes; major & docker updates wait for human review.
+- **Releases (`.github/workflows/release.yml`):** triggered on `v*` tags (`fetch-depth: 0`); checks wheel version, `twine check`, CycloneDX SBOM, GitHub Release (`release_notes.py`, wheel, sdist, SBOM), and publishes `ghcr.io/christianclaudio/mcp-server-kalshi` (`:X.Y.Z`, `:latest`, `UV_DYNAMIC_VERSIONING_BYPASS` set to tag version because the Docker build context has no `.git`). PyPI and MCP Registry jobs remain disabled.
 
-A `v*` tag runs `.github/workflows/release.yml`: build the wheel with full history, check the wheel's version matches the tag, `twine check`, write a CycloneDX SBOM, build the release notes, create the GitHub Release (notes, wheel, sdist, SBOM), and only then publish the Docker image to `ghcr.io/christianclaudio/mcp-server-kalshi` (`:X.Y.Z` and `:latest`). The PyPI step and the MCP Registry job stay commented out: upstream owns the public PyPI name `mcp-server-kalshi` and the registry id `io.github.9crusher/mcp-server-kalshi`. There is no `deploy.yml`. Do not publish this fork to public PyPI or the MCP Registry.
+---
 
-Do not create tags or releases unless the maintainer asks. There is no release PR: merged commits accumulate on `main`, and releases go out on any weekday on the maintainer's go; no fixed release day. Before the tag:
+## VCS
 
-- The release owner previews the release body on an up-to-date `main` with full history and tags (`git fetch --tags && python3 scripts/release_notes.py`) and posts it with the release Ask.
-- The reviewer checks the proposed version against the commit types since the last tag (`!` / `BREAKING CHANGE:` → major, `feat` → minor, otherwise patch), that every breaking commit carries its footer with migration steps, and that the version is unused in the places this fork ships:
-  ```bash
-  git ls-remote --tags origin vX.Y.Z                      # prints nothing
-  gh release view vX.Y.Z --repo christianclaudio/mcp-server-kalshi   # fails: release not found
-  TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:christianclaudio/mcp-server-kalshi:pull" | jq -r .token)
-  curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" \
-    -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
-    https://ghcr.io/v2/christianclaudio/mcp-server-kalshi/manifests/X.Y.Z   # prints 404
-  ```
-  In a throwaway clone, the reviewer tags the release commit locally, runs `rm -rf dist && uv build`, and confirms the wheel is `mcp_server_kalshi-X.Y.Z-py3-none-any.whl` and `scripts/check_version.py` passes; then discards the clone without pushing.
-- Only the maintainer's go creates the tag. If a release fails after the GitHub Release is created or the image is pushed, do not re-run it; merge a fix and tag the next patch.
+```yaml
+vcs:
+  host: github
+  remote: origin
+  repository: christianclaudio/mcp-server-kalshi
+  default_branch: main
+  protected_branches: [main]
+  branch_policy: pr_only
+  merge_strategy: squash
+  delete_branch_on_merge: true
+  require_coderabbit: true
+  branch_naming: type/scope-desc
+```
