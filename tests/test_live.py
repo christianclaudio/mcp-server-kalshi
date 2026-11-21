@@ -311,7 +311,7 @@ async def test_all_discovered_kalshi_tools_live() -> None:
                     )
                     status = "PASS (Authenticated Payload Verified)"
                 else:
-                    assert "requires Kalshi credentials" in text
+                    assert "needs a Kalshi API key" in text
                     status = "PASS (Auth Safety Gate Enforced)"
             elif name in {
                 "get_historical_market",

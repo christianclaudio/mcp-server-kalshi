@@ -104,8 +104,10 @@ class Settings(BaseSettings):
     KALSHI_MCP_PROFILE: str = Field(
         default="full",
         description=(
-            "Server profile. 'full' (default) exposes every tool. 'readonly' keeps "
-            "only tools annotated readOnlyHint=True. Independent of KALSHI_READONLY."
+            "Server profile: full, readonly, markets, or portfolio. 'full' (default) "
+            "exposes every tool. 'readonly' keeps only tools annotated "
+            "readOnlyHint=True. 'markets' and 'portfolio' are job allowlists. "
+            "Independent of KALSHI_READONLY, which composes with any profile."
         ),
     )
     KALSHI_MCP_ENABLE_TOOL_SEARCH: bool = Field(

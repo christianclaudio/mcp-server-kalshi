@@ -108,7 +108,7 @@ async def test_authenticated_method_requires_credentials():
     # No credentials configured -> authed endpoint raises a clear ValueError before any HTTP.
     client = KalshiAPIClient(base_url="https://demo-api.kalshi.co/trade-api/v2")
     assert client.has_credentials is False
-    with pytest.raises(ValueError, match="requires Kalshi credentials"):
+    with pytest.raises(ValueError, match="needs a Kalshi API key"):
         await client.get_balance()
 
 

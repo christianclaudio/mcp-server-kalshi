@@ -326,7 +326,7 @@ async def test_rfq_batch_reads_require_credentials(make_client, monkeypatch) -> 
         "get_rfq_batch_quotes",
     ):
         args = {} if name == "list_rfq_batches" else {"rfq_batch_id": _BATCH_ID}
-        with pytest.raises(ValueError, match="requires Kalshi credentials"):
+        with pytest.raises(ValueError, match="needs a Kalshi API key"):
             await _call(name, args)
     assert requests == []
 

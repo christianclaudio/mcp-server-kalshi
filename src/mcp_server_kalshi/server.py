@@ -8,6 +8,7 @@ import sys
 import time
 import uuid
 from collections.abc import AsyncIterator, Callable, Coroutine, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from functools import wraps
 from typing import Any, Literal, cast
@@ -148,6 +149,7 @@ from mcp_server_kalshi.profiles import (
     ReadOnlyToolFilter,
     get_profile,
     is_read_only_tool,
+    validate_allowlist,
 )
 from mcp_server_kalshi.ssrf import validate_pdf_url
 
@@ -590,6 +592,38 @@ def _attach_code_mode(root: FastMCP) -> bool:
     return True
 
 
+# Visibility filters tools only. ``enable(only=True)`` is not used: it disables
+# every component type first, which would also hide prompts and resources.
+# https://gofastmcp.com/servers/visibility
+_TOOL_COMPONENTS: set[Literal["tool", "resource", "template", "prompt"]] = {"tool"}
+
+
+def _catalog_tool_names(root: FastMCP) -> set[str]:
+    """Return the full catalog's tool names, before an allowlist is applied.
+
+    Runs on a worker thread with its own event loop so ``create_server`` stays
+    synchronous and safe to call from inside a running loop. The subclass
+    ``list_tools`` also drops writes while ``KALSHI_READONLY`` is on, so this
+    uses the FastMCP implementation: the unfiltered catalog.
+    """
+
+    async def _collect() -> set[str]:
+        tools = await FastMCP.list_tools(root)
+        return {tool.name for tool in tools}
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, _collect()).result()
+
+
+def _apply_tool_allowlist(root: FastMCP, allowlist: frozenset[str]) -> None:
+    """Expose only ``allowlist`` tools. Prompts and resources stay listed.
+
+    Disable every tool, then enable the named ones. The later enable wins.
+    """
+    root.disable(components=_TOOL_COMPONENTS)
+    root.enable(names=set(allowlist), components=_TOOL_COMPONENTS)
+
+
 def _apply_discovery(
     root: FastMCP,
     *,
@@ -600,6 +634,11 @@ def _apply_discovery(
 ) -> None:
     """Apply the profile filter and, on ``full`` only, Tool Search or Code Mode.
 
+    An allowlist profile is validated against the full catalog, then applied as
+    a tools-only visibility filter. ``KALSHI_READONLY=1`` composes with every
+    profile through ``KalshiFastMCP.list_tools``: a job profile lists the same
+    tools under that gate, because every allowlisted tool is read-only.
+
     The two discovery modes are mutually exclusive. Requesting either on a
     profile other than ``full`` logs a warning and leaves the flat catalog.
     """
@@ -609,6 +648,9 @@ def _apply_discovery(
             "Tool Search and Code Mode are mutually exclusive; enable only one "
             "discovery mode."
         )
+    if active.is_allowlist:
+        allowlist = validate_allowlist(active, _catalog_tool_names(root))
+        _apply_tool_allowlist(root, allowlist)
     if active.readonly:
         root.add_transform(ReadOnlyToolFilter())
     if enable_tool_search:
@@ -2150,8 +2192,9 @@ async def handle_get_event_metadata(request: dict[str, Any]) -> Any:
         "Get historical raw and formatted forecast numbers for an event at "
         "specific percentiles "
         "(GET /series/{series_ticker}/events/{ticker}/forecast_percentile_history). "
-        "Authenticated. period_interval 0 is a 5-second bucket; 1, 60, and 1440 "
-        "are minute-based."
+        "Needs a Kalshi API key (KALSHI_API_KEY plus a private key) and is refused "
+        "locally without one, in any profile. period_interval 0 is a 5-second "
+        "bucket; 1, 60, and 1440 are minute-based."
     ),
     input_schema=GetEventForecastPercentileHistoryRequest,
     read_only=True,
@@ -2977,8 +3020,9 @@ def main() -> None:
         choices=sorted(PROFILES),
         default=settings.KALSHI_MCP_PROFILE,
         help=(
-            "Server profile (default 'full'): 'full' is every tool, 'readonly' "
-            "keeps tools annotated readOnlyHint=True."
+            "Server profile (default 'full'): full, readonly, markets, portfolio. "
+            "'full' is every tool. 'readonly' keeps tools annotated "
+            "readOnlyHint=True. 'markets' and 'portfolio' are job allowlists."
         ),
     )
     parser.add_argument(
