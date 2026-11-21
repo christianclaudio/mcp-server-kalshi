@@ -6,7 +6,7 @@ Instructions for AI coding agents working on `mcp-server-kalshi` or integrating 
 
 ## 🎯 Project Overview & Fork Purpose
 
-`mcp-server-kalshi` is an enterprise-hardened fork of `9crusher/mcp-server-kalshi` exposing the [Kalshi](https://kalshi.com) Trade API v2 as MCP tools (Python 3.11+, `uv >= 0.13.4`, `fastmcp>=4.2.1`, `mcp>=2.3.0`, Spec 2026-07-28, `httpx`, `pydantic` v2, `cryptography` RSA-PSS/Ed25519).
+`mcp-server-kalshi` is an enterprise-hardened fork of `9crusher/mcp-server-kalshi` exposing the [Kalshi](https://kalshi.com) Trade API v2 as MCP tools (Python 3.11+, `uv >= 0.13.4`, `fastmcp>=4.2.4`, `mcp>=2.3.0`, Spec 2026-07-28, `httpx`, `pydantic` v2, `cryptography` RSA-PSS/Ed25519).
 
 - **Distribution (NO public PyPI / MCP Registry publish):** install from git or `ghcr.io/christianclaudio/mcp-server-kalshi`. Upstream owns `mcp-server-kalshi` on PyPI and `io.github.9crusher/mcp-server-kalshi` in the MCP Registry — never publish this fork there.
 
