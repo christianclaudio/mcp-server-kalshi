@@ -11,11 +11,17 @@ import pytest
 from fastmcp.tools.base import Tool
 
 from mcp_server_kalshi.config import Settings
+from mcp_server_kalshi.kalshi_client.base import MISSING_CREDENTIALS_ERROR
 from mcp_server_kalshi.profiles import (
+    FULL_ONLY_TOOLS,
+    MARKETS_TOOLS,
+    PORTFOLIO_TOOLS,
     PROFILES,
+    Profile,
     ReadOnlyAnnotations,
     get_profile,
     is_read_only_tool,
+    validate_allowlist,
 )
 from mcp_server_kalshi.server import (
     CODE_MODE_READ_ONLY_TOOLS,
@@ -161,7 +167,12 @@ def test_unknown_profile_raises() -> None:
 
 def test_profile_name_is_case_insensitive() -> None:
     assert get_profile(" READONLY ").name == "readonly"
-    assert set(PROFILES) == {"full", "readonly"}
+    assert get_profile(" Markets ").name == "markets"
+    assert set(PROFILES) == {"full", "readonly", "markets", "portfolio"}
+    assert PROFILES["markets"].is_allowlist
+    assert PROFILES["portfolio"].is_allowlist
+    assert not PROFILES["full"].is_allowlist
+    assert not PROFILES["readonly"].is_allowlist
 
 
 def test_discovery_modes_are_mutually_exclusive() -> None:
@@ -383,3 +394,177 @@ def test_main_profile_flag_rebuilds_the_gateway(
         server.mcp = original
         server.server = original
         server.streamable_http_app = original.streamable_http_app
+
+
+_PROFILE_COUNTS = {
+    "full": (101, 94),
+    "readonly": (94, 94),
+    "markets": (44, 44),
+    "portfolio": (31, 31),
+}
+
+
+def _read_only_count(tools: list[Any]) -> int:
+    return sum(1 for tool in tools if is_read_only_tool(tool))
+
+
+@pytest.mark.parametrize(
+    ("profile", "expected"),
+    sorted(_PROFILE_COUNTS.items()),
+)
+async def test_profile_counts(profile: str, expected: tuple[int, int]) -> None:
+    """Each profile lists its signed-off total and read-only counts."""
+    tools = list(await create_server(profile=profile).list_tools())
+    assert (len(tools), _read_only_count(tools)) == expected
+    if profile == "markets":
+        assert _names(tools) == set(MARKETS_TOOLS)
+    elif profile == "portfolio":
+        assert _names(tools) == set(PORTFOLIO_TOOLS)
+
+
+@pytest.mark.parametrize("profile", sorted(_PROFILE_COUNTS))
+async def test_readonly_env_composes(
+    monkeypatch: pytest.MonkeyPatch, profile: str
+) -> None:
+    """KALSHI_READONLY=1 keeps exactly that profile's read-only tools."""
+    plain = await create_server(profile=profile).list_tools()
+    expected = {tool.name for tool in plain if is_read_only_tool(tool)}
+    monkeypatch.setattr("mcp_server_kalshi.server.settings.KALSHI_READONLY", True)
+    listed = _names(await create_server(profile=profile).list_tools())
+    assert listed == expected
+    assert len(listed) == _PROFILE_COUNTS[profile][1]
+
+
+async def test_job_lists_and_full_only_partition_the_catalog() -> None:
+    """Every full tool is in a job allowlist or FULL_ONLY_TOOLS, and not both."""
+    full = _names(await create_server(profile="full").list_tools())
+    jobs = MARKETS_TOOLS | PORTFOLIO_TOOLS
+    assert jobs | FULL_ONLY_TOOLS == full
+    assert jobs.isdisjoint(FULL_ONLY_TOOLS)
+    assert len(FULL_ONLY_TOOLS) == 30
+    assert len(MARKETS_TOOLS) == 44
+    assert len(PORTFOLIO_TOOLS) == 31
+    assert len(jobs) == 71
+    catalog = {
+        tool.name: tool for tool in await create_server(profile="full").list_tools()
+    }
+    assert all(is_read_only_tool(catalog[name]) for name in jobs)
+
+
+async def test_job_profile_hides_tools_outside_its_list() -> None:
+    markets = create_server(profile="markets")
+    portfolio = create_server(profile="portfolio")
+    assert await markets.get_tool("get_market") is not None
+    assert await markets.get_tool("get_balance") is None
+    assert await markets.get_tool("create_order") is None
+    assert await portfolio.get_tool("get_balance") is not None
+    assert await portfolio.get_tool("list_markets") is None
+    assert await portfolio.get_tool("create_order") is None
+
+
+def test_unknown_allowlist_name_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An allowlisted name missing from the catalog fails at server build."""
+    broken = Profile(
+        name="broken",
+        job="Test only.",
+        tools=frozenset({"list_markets", "not_a_real_tool", "also_missing"}),
+    )
+    monkeypatch.setitem(PROFILES, "broken", broken)
+    with pytest.raises(ValueError, match="also_missing, not_a_real_tool"):
+        create_server(profile="broken")
+
+
+def test_validate_allowlist_without_tools_is_empty() -> None:
+    assert validate_allowlist(PROFILES["full"], {"list_markets"}) == frozenset()
+
+
+async def test_job_profiles_keep_prompts_and_resources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Allowlist filtering is tools-only: prompts and resources match full."""
+    import mcp_server_kalshi.server as server
+
+    real = server._copy_catalog
+
+    def _copy(root: Any) -> None:
+        real(root)
+
+        @root.prompt
+        def profile_note() -> str:
+            """Visible on every profile."""
+            return "note"
+
+        @root.resource("kalshi://profile-note")
+        def profile_note_resource() -> str:
+            """Visible on every profile."""
+            return "note"
+
+    monkeypatch.setattr(server, "_copy_catalog", _copy)
+    full = create_server(profile="full")
+    full_prompts = {item.name for item in await full.list_prompts()}
+    full_resources = {str(item.uri) for item in await full.list_resources()}
+    assert full_prompts == {"profile_note"}
+    assert "kalshi://profile-note" in full_resources
+    for profile in ("markets", "portfolio"):
+        job = create_server(profile=profile)
+        assert {item.name for item in await job.list_prompts()} == full_prompts
+        assert {str(item.uri) for item in await job.list_resources()} == full_resources
+
+
+@pytest.mark.parametrize("profile", ["markets", "portfolio"])
+async def test_search_and_code_mode_do_not_attach_on_job_profiles(
+    caplog: pytest.LogCaptureFixture, profile: str
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        searched = create_server(profile=profile, enable_tool_search=True)
+        coded = create_server(profile=profile, enable_code_mode=True)
+    flat = _names(await create_server(profile=profile).list_tools())
+    assert _names(await searched.list_tools()) == flat
+    assert _names(await coded.list_tools()) == flat
+    assert SYNTHETIC.isdisjoint(flat)
+    messages = [record.message for record in caplog.records]
+    assert any(
+        f"Tool Search requested with profile={profile!r}" in message
+        for message in messages
+    )
+    assert any(
+        f"Code Mode requested with profile={profile!r}" in message
+        for message in messages
+    )
+
+
+async def test_markets_profile_refuses_percentile_history_without_a_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The one keyed markets tool is refused locally and sends no request."""
+    import mcp_server_kalshi.server as server
+
+    calls: list[str] = []
+
+    async def _no_network(*_args: Any, **_kwargs: Any) -> Any:
+        calls.append("request")
+        raise AssertionError("get_event_forecast_percentile_history made a request")
+
+    monkeypatch.setattr(server.kalshi_client, "get", _no_network)
+    monkeypatch.setattr(server.kalshi_client, "_request", _no_network)
+    app = create_server(profile="markets")
+    listed = await app.get_tool("get_event_forecast_percentile_history")
+    assert listed is not None
+    assert listed.description is not None
+    assert "KALSHI_API_KEY" in listed.description
+    assert "any profile" in listed.description
+    result = await app.call_tool(
+        "get_event_forecast_percentile_history",
+        {
+            "series_ticker": "SERIES",
+            "ticker": "EVENT",
+            "percentiles": [5000],
+            "start_ts": 1,
+            "end_ts": 2,
+            "period_interval": 60,
+        },
+    )
+    text = _text(result)
+    assert MISSING_CREDENTIALS_ERROR in text
+    assert "KALSHI_API_KEY" in text
+    assert calls == []

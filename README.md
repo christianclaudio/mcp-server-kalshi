@@ -13,6 +13,8 @@ graph TD
     Client["AI Agent (Claude / Cortex / Antigravity / Cursor)"] -->|"MCP Stdio / Streamable HTTP"| Server["mcp-server-kalshi"]
     Server --> Config["KalshiSettings & Safety Gates"]
     Config -->|"KALSHI_READONLY=1 or profile=readonly"| RO["Read-Only Gate (94 tools)"]
+    Config -->|"profile=markets"| Markets["Markets job (44 tools)"]
+    Config -->|"profile=portfolio"| Portfolio["Portfolio job (31 tools)"]
     Config -->|"confirm=True"| Mutating["Order Execution Gate (7 tools)"]
     Config -->|"Default: demo"| EnvSelect{"Environment Router"}
     EnvSelect -->|"demo"| DemoAPI["Kalshi Demo API (demo-api.kalshi.co)"]
@@ -27,7 +29,7 @@ graph TD
 
 - **Discovery & Search** — `list_markets`, `get_market`, `list_events`, `get_event`, `list_series`, `get_series`, `get_tags_by_categories`, `get_sports_filters`.
 - **Research & Live Feeds** — `get_market_orderbook`, `get_market_orderbooks`, `get_market_candlesticks`, `batch_get_market_candlesticks`, `get_event_candlesticks`, `get_market_trades`, `get_event_live_data`, `get_live_data_batch`, `get_live_data_by_milestone`, `get_live_data` (legacy typed path), `get_game_stats`, `get_weather_index`, `get_weather_index_calibrations`, `get_milestones`, `get_milestone`.
-- **Event & Series Metadata** — `get_event_metadata`, `get_series_fee_changes`, `get_event_fee_changes`, `list_multivariate_events`, `get_event_forecast_percentile_history` (authenticated).
+- **Event & Series Metadata** — `get_event_metadata`, `get_series_fee_changes`, `get_event_fee_changes`, `list_multivariate_events`, `get_event_forecast_percentile_history` (needs a Kalshi API key; the only `markets` tool that does).
 - **Structured Targets & Incentives** — `list_structured_targets`, `get_structured_target`, `list_incentive_programs`, `get_incentive_schedules`.
 - **On-Request Markets** — `get_weather_point_availability`; `get_concert_cancellation_availability`, `list_concerts`, and `search_concerts` (the concert list and search are authenticated).
 - **Deep Contract Rules** — `get_market_rules` consolidates `rules_primary`/`rules_secondary`, early-close conditions, settlement sources, and series prohibitions; `fetch_rules_pdf` downloads and extracts the exact legal contract terms text.
@@ -47,12 +49,27 @@ graph TD
 
 - **Sandbox Default:** The server targets Kalshi's **demo (sandbox)** environment unless `KALSHI_ENV=prod` is explicitly set.
 - **Simulation Preview Gating:** Mutating order tools (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`) require `confirm=true`. Without it, they return a structured simulation **preview** and send nothing.
-- **Read-Only Mode:** `KALSHI_READONLY=1` hides every tool whose `readOnlyHint` is not true and `ToolRegistry.get_handler` refuses a write. `KALSHI_MCP_PROFILE=readonly` (or `--profile readonly`) does the same with a `ReadOnlyToolFilter` and does not depend on `KALSHI_READONLY`. The default profile `full` still exposes all 101 tools.
-- **Tool Search and Code Mode (opt-in, full profile only):** `KALSHI_MCP_ENABLE_TOOL_SEARCH` / `--enable-tool-search` replaces `tools/list` with `search_tools` and `call_tool` (`KALSHI_MCP_TOOL_SEARCH_BACKEND` `regex` or `bm25`). `KALSHI_MCP_ENABLE_CODE_MODE` / `--enable-code-mode` replaces it with `search`, `get_schema`, and `execute` (install the `code-mode` extra). They are mutually exclusive and are not attached on `readonly`. With `KALSHI_READONLY=1`, `search_tools` / `search` / `get_schema` stay listed because they are read-only, and `call_tool` / `execute` stay listed so a client can still invoke read-only tools. `search_tools` never returns a write tool in that mode. A write tool reached through `call_tool`, `execute`, or a direct call is still refused by `ToolRegistry.get_handler`.
+- **Read-Only Mode:** `KALSHI_READONLY=1` hides every tool whose `readOnlyHint` is not true and `ToolRegistry.get_handler` refuses a write. `KALSHI_MCP_PROFILE=readonly` (or `--profile readonly`) does the same with a `ReadOnlyToolFilter` and does not depend on `KALSHI_READONLY`. The default profile `full` still exposes all 101 tools. `KALSHI_READONLY=1` composes with any profile.
+- **Tool Search and Code Mode (opt-in, full profile only):** `KALSHI_MCP_ENABLE_TOOL_SEARCH` / `--enable-tool-search` replaces `tools/list` with `search_tools` and `call_tool` (`KALSHI_MCP_TOOL_SEARCH_BACKEND` `regex` or `bm25`). `KALSHI_MCP_ENABLE_CODE_MODE` / `--enable-code-mode` replaces it with `search`, `get_schema`, and `execute` (install the `code-mode` extra). They are mutually exclusive and are not attached on `readonly`, `markets`, or `portfolio`. With `KALSHI_READONLY=1`, `search_tools` / `search` / `get_schema` stay listed because they are read-only, and `call_tool` / `execute` stay listed so a client can still invoke read-only tools. `search_tools` never returns a write tool in that mode. A write tool reached through `call_tool`, `execute`, or a direct call is still refused by `ToolRegistry.get_handler`.
 - **Secret Scrubbing:** Private keys (PEM), API keys, request signatures, and Bearer tokens are scrubbed from error logs via `redact_secrets()`.
 - **Intuitive Order Pricing:** Exposes intuitive whole **cents** limit pricing and automatically translates buy-NO ⇄ sell-YES orderbook math.
 
 ---
+
+## Profiles
+
+Allowlists filter tool names only. Wire names are unchanged, and prompts and resources stay listed. `KALSHI_READONLY=1` composes with every profile. On `markets` and `portfolio` the listed tools stay the same under that gate, because every tool on those profiles is read-only. Tool Search and Code Mode attach on `full` only.
+
+| Profile | Tools | Read-only | Job |
+| :--- | :---: | :---: | :--- |
+| `full` | 101 | 94 | Complete catalog, including the 7 order writes (still gated by `confirm=true`). |
+| `readonly` | 94 | 94 | Every tool annotated `readOnlyHint=true`. |
+| `markets` | 44 | 44 | Research markets: series, events and markets, prices, order books, candlesticks, trades, settlement rules, live data and historical market data. No account data, no orders. |
+| `portfolio` | 31 | 31 | Review my account: balance, positions, fills, settlements, orders and order groups, queue positions, subaccounts, transfers, deposits and withdrawals, historical fills, orders and positions, API limits. No order writes. |
+
+`markets` and `portfolio` share 4 tools (`get_environment`, `get_exchange_status`, `get_market`, `get_historical_cutoff`), so 71 tools appear on a job profile. The other **30 stay on `full` only**: the 7 order writes (`create_order`, `amend_order`, `decrease_order`, `cancel_order`, `batch_create_orders`, `batch_cancel_orders`, `cancel_order_group`); FCM-member tools (`list_fcm_subtraders`, the 5 `get_fcm_*` tools, `get_total_resting_order_value`); RFQ, quote, block-trade, and communications reads; `list_api_keys`; and `list_concerts`, `search_concerts`, `get_concert_cancellation_availability`, `get_weather_point_availability`.
+
+`get_event_forecast_percentile_history` is the only `markets` tool that needs a Kalshi API key (`KALSHI_API_KEY` plus a private key). Without one, the server refuses the call locally, on every profile, and does not send a request. The other 43 `markets` tools work with no key.
 
 ## ⚙️ Configuration
 
@@ -63,7 +80,7 @@ graph TD
 | `KALSHI_PRIVATE_KEY_PATH` | _(none)_ | Path to your RSA or Ed25519 private key `.pem`. Set this or `KALSHI_PRIVATE_KEY`, not both. |
 | `KALSHI_PRIVATE_KEY` | _(none)_ | PEM text of that same key, instead of a file. See below. |
 | `KALSHI_READONLY` | `0` / `false` | When enabled (`1`), hides non-read-only tools and refuses them in the handler, including a write reached through Tool Search or Code Mode. |
-| `KALSHI_MCP_PROFILE` | `full` | `full` (all 101 tools) or `readonly` (readOnlyHint tools only). `--profile` overrides. |
+| `KALSHI_MCP_PROFILE` | `full` | `full` (101 tools), `readonly` (94 read-only tools), `markets` (44), or `portfolio` (31). `--profile` overrides. |
 | `KALSHI_MCP_ENABLE_TOOL_SEARCH` | `0` / `false` | On `full` only, replace `tools/list` with `search_tools` + `call_tool`. |
 | `KALSHI_MCP_TOOL_SEARCH_BACKEND` | `regex` | `regex` or `bm25`. |
 | `KALSHI_MCP_ENABLE_CODE_MODE` | `0` / `false` | On `full` only, replace `tools/list` with `search`, `get_schema`, and `execute`. Needs the `code-mode` extra. Mutually exclusive with Tool Search. |
