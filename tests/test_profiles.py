@@ -565,6 +565,10 @@ async def test_markets_profile_refuses_percentile_history_without_a_key(
         },
     )
     text = _text(result)
+    assert (
+        "This action needs a Kalshi API key. Set KALSHI_API_KEY and either "
+        "KALSHI_PRIVATE_KEY_PATH or KALSHI_PRIVATE_KEY in the server environment."
+    ) in text
     assert MISSING_CREDENTIALS_ERROR in text
-    assert "KALSHI_API_KEY" in text
+    assert "API key" in text
     assert calls == []

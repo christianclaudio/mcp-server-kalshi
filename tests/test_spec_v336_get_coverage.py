@@ -630,7 +630,7 @@ async def test_new_gets_match_auth_and_public_credentials(
     for name, auth, args, _scalar, _multi in NEW_CASES:
         before = len(requests)
         if auth:
-            with pytest.raises(ValueError, match="requires Kalshi credentials"):
+            with pytest.raises(ValueError, match="needs a Kalshi API key"):
                 await _call(name, args)
             assert len(requests) == before
         else:

@@ -32,7 +32,7 @@ BOTH_PRIVATE_KEY_SOURCES_ERROR = (
 )
 INVALID_PRIVATE_KEY_PEM_ERROR = "KALSHI_PRIVATE_KEY is not a valid PEM private key"
 MISSING_CREDENTIALS_ERROR = (
-    "This action requires Kalshi credentials. Set KALSHI_API_KEY and either "
+    "This action needs a Kalshi API key. Set KALSHI_API_KEY and either "
     "KALSHI_PRIVATE_KEY_PATH or KALSHI_PRIVATE_KEY in the server environment."
 )
 
