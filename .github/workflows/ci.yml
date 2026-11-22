@@ -31,7 +31,7 @@ jobs:
           persist-credentials: false
           # Full history and tags: the package version comes from the git tag.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0
         with:
           # Newest uv that meets pyproject.toml's [tool.uv] required-version (>=0.13.4, from
           # FastMCP's October 2026 certificate authority incident notice).
@@ -61,7 +61,7 @@ jobs:
           persist-credentials: false
           # Full history and tags: the package version comes from the git tag.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0
         with:
           # Newest uv that meets pyproject.toml's [tool.uv] required-version (>=0.13.4, from
           # FastMCP's October 2026 certificate authority incident notice).
@@ -98,7 +98,7 @@ jobs:
           persist-credentials: false
           # Full history and tags: the package version comes from the git tag.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0
         with:
           # Newest uv that meets pyproject.toml's [tool.uv] required-version (>=0.13.4, from
           # FastMCP's October 2026 certificate authority incident notice).
@@ -118,7 +118,7 @@ jobs:
           persist-credentials: false
           # Full history and tags: the package version comes from the git tag.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0
         with:
           # Newest uv that meets pyproject.toml's [tool.uv] required-version (>=0.13.4, from
           # FastMCP's October 2026 certificate authority incident notice).
@@ -138,7 +138,7 @@ jobs:
           persist-credentials: false
           # Full history and tags: the package version comes from the git tag.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0
         with:
           # Newest uv that meets pyproject.toml's [tool.uv] required-version (>=0.13.4, from
           # FastMCP's October 2026 certificate authority incident notice).
@@ -271,7 +271,7 @@ jobs:
           persist-credentials: false
           # Full history and tags: the package version comes from the git tag.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0
         with:
           # Newest uv that meets pyproject.toml's [tool.uv] required-version (>=0.13.4, from
           # FastMCP's October 2026 certificate authority incident notice).
@@ -303,7 +303,7 @@ jobs:
           persist-credentials: false
           # Full history and tags: the package version comes from the git tag.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0
         with:
           # Newest uv that meets pyproject.toml's [tool.uv] required-version (>=0.13.4, from
           # FastMCP's October 2026 certificate authority incident notice).
