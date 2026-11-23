@@ -107,7 +107,7 @@ coderabbit review --agent --uncommitted
 ## 🔄 CI & Releases
 
 - **CI (`.github/workflows/ci.yml`):** installs with `uv sync --locked --all-extras`; runs on `push` (`main`, `feat/*`), `pull_request` (`main`), weekly schedule, and `workflow_dispatch` (`fetch-depth: 0` on package jobs). Jobs: `lint-and-types`, `test` (Python 3.11–3.14, 100% cov) + `tests`, `tool-contract`, `openapi-drift`, `build-check` (`check_version.py` + `twine check`), `docker-build` (no push; verifies stripped build deps, stdio `initialize`/`tools/list`, negative `CA_CERTIFICATES_FLOOR`), `conformance`, and `drift-check` (schedule/manual only; fails on non-zero exit and opens `forge-todo` issue on `main` drift or monitor failure).
-- **Dependabot (`dependabot-automerge.yml`):** squash-merges minor/patch PRs (`gh pr merge --squash --match-head-commit`) after CI passes; major & docker updates wait for human review.
+- **Dependabot (`dependabot-automerge.yml`):** squash-merges minor/patch PRs (`gh pr merge --squash --match-head-commit`) after CI passes on that head commit, only when every commit is Dependabot's or a clean GitHub update-branch merge; major and `docker` updates always wait for human review.
 - **Releases (`.github/workflows/release.yml`):** triggered on `v*` tags (`fetch-depth: 0`); checks wheel version, `twine check`, CycloneDX SBOM, GitHub Release (`release_notes.py`, wheel, sdist, SBOM), and publishes `ghcr.io/christianclaudio/mcp-server-kalshi` (`:X.Y.Z`, `:latest`, `UV_DYNAMIC_VERSIONING_BYPASS` set to tag version because the Docker build context has no `.git`). PyPI and MCP Registry jobs remain disabled.
 
 ---
