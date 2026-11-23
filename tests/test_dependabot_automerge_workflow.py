@@ -18,11 +18,15 @@ def _text() -> str:
 
 def _code_lines(text: str) -> str:
     """The workflow without its full-line comments."""
-    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    return "\n".join(
+        line for line in text.splitlines() if not line.lstrip().startswith("#")
+    )
 
 
 def _merge_step_if(text: str) -> str:
-    start = text.index("- name: Merge semver-minor and semver-patch updates after CI succeeds")
+    start = text.index(
+        "- name: Merge semver-minor and semver-patch updates after CI succeeds"
+    )
     block = text[start:]
     if_start = block.index("if: >-")
     return block[if_start : block.index("run: |", if_start)]
@@ -51,7 +55,10 @@ def test_classifier_rules_present() -> None:
 
 
 def test_head_sha_must_be_listed() -> None:
-    """The head must be somewhere in the commit list; GitHub does not promise the order."""
+    """The head must be somewhere in the commit list.
+
+    GitHub does not promise the order.
+    """
     assert 'cut -f1 | grep -xF "$HEAD_SHA"' in _code_lines(_text())
 
 
